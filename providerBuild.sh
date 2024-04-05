@@ -3,8 +3,8 @@
 # Provider Setup Script
 
 # Usage instructions
-# "Usage: $0 -a ACCOUNT_ADDRESS -k KEY_PASSWORD -d DOMAIN -n NODE [-g -w 'worker1,worker2']"
-# "Example: $0 -a akash1mtnuc449l0mckz4cevs835qg72nvqwlul5wzyf -k akash -d akashtesting.xyz -n http://akash-node-1:26657 -g -w 'worker1,worker2'"
+# "Usage: $0 -a ACCOUNT_ADDRESS -k KEY_PASSWORD -d DOMAIN -n NODE [-g -w 'worker1,worker2'] [-p]"
+# "Example: $0 -a akash1mtnuc449l0mckz4cevs835qg72nvqwlul5wzyf -k akash -d akashtesting.xyz -n http://akash-node-1:26657 -g -w worker1,worker2 -p"
 
 # Initialize variables with default values or empty
 ACCOUNT_ADDRESS=""
@@ -13,9 +13,10 @@ DOMAIN=""
 NODE=""
 install_gpu_support=false
 gpu_nodes=()
+use_pricing_script=false
 
 # Process command-line options
-while getopts ":a:k:d:n:gw:" opt; do
+while getopts ":a:k:d:n:gw:p" opt; do
   case ${opt} in
     a )
       ACCOUNT_ADDRESS=$OPTARG
@@ -31,6 +32,9 @@ while getopts ":a:k:d:n:gw:" opt; do
       ;;
     g )
       install_gpu_support=true
+      ;;
+    p )
+      use_pricing_script=true
       ;;
     w )
       IFS=',' read -r -a gpu_nodes <<< "$OPTARG"
@@ -77,16 +81,10 @@ helm repo update
 
 echo "Helm and Akash repository setup completed."
 
-# Install Akash hostname operator
-echo "Installing Akash hostname operator..."
+# Install Akash services using Helm
+echo "Installing Akash services..."
 helm install akash-hostname-operator akash/akash-hostname-operator -n akash-services
-
-# Install Akash inventory operator
-echo "Installing Akash inventory operator..."
 helm install inventory-operator akash/akash-inventory-operator -n akash-services
-
-# Install Akash node
-echo "Installing Akash node..."
 helm install akash-node akash/akash-node -n akash-services
 
 # Prepare provider configuration
@@ -117,21 +115,30 @@ EOF
 
 echo "Provider configuration prepared."
 
+# Download and prepare the pricing script if the -p option is used
+if [ "$use_pricing_script" = true ]; then
+    echo "Downloading custom pricing script..."
+    wget https://raw.githubusercontent.com/akash-network/helm-charts/main/charts/akash-provider/scripts/price_script_generic.sh
+    PRICING_SCRIPT_B64="$(cat price_script_generic.sh | openssl base64 -A)"
+fi
+
 # Install CRDs for Akash provider
 echo "Installing CRDs for Akash provider..."
 kubectl apply -f https://raw.githubusercontent.com/akash-network/provider/v0.5.4/pkg/apis/akash.network/crd.yaml
 
-# Install Akash provider
+# Install Akash provider with or without the pricing script
 echo "Installing Akash provider..."
-helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml
+if [ "$use_pricing_script" = true ]; then
+    helm install akash-provider akash/provider -n akash-services -f provider.yaml --set bidpricescript="$PRICING_SCRIPT_B64"
+else
+    helm install akash-provider akash/provider -n akash-services -f provider.yaml
+fi
 
 echo "Akash provider installation completed."
 
 # Install NGINX Ingress Controller
 echo "Installing NGINX Ingress Controller..."
-
 cd ~
-
 cat > ingress-nginx-custom.yaml << EOF
 controller:
   service:
@@ -155,20 +162,16 @@ tcp:
   "8443": "akash-services/akash-provider:8443"
   "8444": "akash-services/akash-provider:8444"
 EOF
-
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --version 4.10.0 \
   --namespace ingress-nginx --create-namespace \
   -f ingress-nginx-custom.yaml
-
 kubectl label ns ingress-nginx app.kubernetes.io/name=ingress-nginx app.kubernetes.io/instance=ingress-nginx
 kubectl label ingressclass akash-ingress-class akash.network=true
-
 echo "NGINX Ingress Controller installation completed."
 
-# Apply NVIDIA Runtime Engine and label GPU nodes if GPUs are part of the cluster
+# Configure NVIDIA Runtime Engine if GPUs are part of the cluster
 if [ "$install_gpu_support" = true ]; then
     echo "Configuring NVIDIA Runtime Engine..."
     cat > nvidia-runtime-class.yaml << EOF
@@ -178,18 +181,14 @@ metadata:
   name: nvidia
 handler: nvidia
 EOF
-
     kubectl apply -f nvidia-runtime-class.yaml
-
     for node in "${gpu_nodes[@]}"; do
         echo "Labeling $node for NVIDIA support..."
         kubectl label nodes "$node" allow-nvdp=true --overwrite
     done
-
     echo "Adding NVIDIA Device Plugin Helm repository..."
     helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
     helm repo update
-
     echo "Installing NVIDIA Device Plugin..."
     helm upgrade -i nvdp nvdp/nvidia-device-plugin \
       --namespace nvidia-device-plugin \
@@ -198,7 +197,6 @@ EOF
       --set runtimeClassName="nvidia" \
       --set deviceListStrategy=volume-mounts \
       --set-string nodeSelector.allow-nvdp="true"
-
     echo "NVIDIA Runtime Engine configuration completed."
 fi
 
