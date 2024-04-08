@@ -191,6 +191,41 @@ kubectl label ns ingress-nginx app.kubernetes.io/name=ingress-nginx app.kubernet
 kubectl label ingressclass akash-ingress-class akash.network=true
 echo "NGINX Ingress Controller installation completed."
 
+# Apply NVIDIA Runtime Engine and label GPU nodes if GPUs are part of the cluster
+if [ "$install_gpu_support" = true ]; then
+    echo "Configuring NVIDIA Runtime Engine..."
+
+    cat > nvidia-runtime-class.yaml << EOF
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+  name: nvidia
+handler: nvidia
+EOF
+
+    kubectl apply -f nvidia-runtime-class.yaml
+
+    for node in "${gpu_nodes[@]}"; do
+        echo "Labeling $node for NVIDIA support..."
+        kubectl label nodes "$node" allow-nvdp=true
+    done
+
+    echo "Adding NVIDIA Device Plugin Helm repository..."
+    helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
+    helm repo update
+
+    echo "Installing NVIDIA Device Plugin..."
+    helm upgrade -i nvdp nvdp/nvidia-device-plugin \
+      --namespace nvidia-device-plugin \
+      --create-namespace \
+      --version 0.14.5 \
+      --set runtimeClassName="nvidia" \
+      --set deviceListStrategy=volume-mounts \
+      --set-string nodeSelector.allow-nvdp="true"
+
+    echo "NVIDIA Runtime Engine configuration completed."
+fi
+
 # If storage support is enabled, add Rook-Ceph Helm repository, install Rook-Ceph operator, and cluster
 if [ "$install_storage_support" = true ]; then
     echo "Adding Rook-Ceph Helm repository for persistent storage support..."
