@@ -4,12 +4,16 @@
 
 # Default values for options
 disable_components="traefik"
+external_ip=""
 
 # Process command-line options
-while getopts ":d:" opt; do
+while getopts ":d:e:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
+      ;;
+    e )
+      external_ip=$OPTARG
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -25,8 +29,20 @@ shift $((OPTIND -1))
 
 # Install K3s master node
 echo "Starting K3s installation on master node..."
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable=${disable_components}" sh -
+install_exec="--disable=${disable_components}"
+if [[ -n "$external_ip" ]]; then
+    install_exec+=" --tls-san=${external_ip}"
+fi
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
 echo "K3s installation completed."
+
+# If an external IP is specified, update the kubeconfig file
+if [[ -n "$external_ip" ]]; then
+    KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+    echo "Updating kubeconfig file to use external IP address..."
+    sed -i "s/127.0.0.1/$external_ip/g" $KUBECONFIG
+    echo "kubeconfig file updated to use external IP address."
+fi
 
 # Validate health of master node with retry mechanism
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
