@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Example use:
-# ./worker_script.sh -m 10.128.0.2 -t K1085a240214a2c903fabe6eaaf7785a439b227597e516294d208b38a122e62fa3e -g
+#./worker.sh -m 10.128.0.8 -t K10cef5da8867a6d3d2acc25aa817c7c06f86a638ee7ad4c0668c248c23167c1140::server:da3e13b2aafc1983789be9841b7e5e83 -g -s
 
 # Worker Script
 
@@ -9,9 +9,10 @@
 master_ip=""
 token=""
 install_gpu_drivers=false
+install_storage_support=false
 
 # Process command-line options
-while getopts ":m:t:g" opt; do
+while getopts ":m:t:gs" opt; do
   case ${opt} in
     m )
       master_ip=$OPTARG
@@ -21,6 +22,9 @@ while getopts ":m:t:g" opt; do
       ;;
     g )
       install_gpu_drivers=true
+      ;;
+    s )
+      install_storage_support=true
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -63,19 +67,12 @@ if [ "$install_gpu_drivers" = true ]; then
 
     echo "Installing NVIDIA drivers..."
     apt-get install -y ubuntu-drivers-common
-
-    echo "Please follow the prompts to identify and install the recommended NVIDIA driver..."
     ubuntu-drivers devices
-
-    echo "Running ubuntu-drivers autoinstall, please follow any interactive prompts..."
     ubuntu-drivers autoinstall
-
-    echo "NVIDIA GPU drivers installation should be completed."
 
     echo "NVIDIA GPU drivers installation completed."
 
     echo "Installing NVIDIA CUDA toolkit and container runtime..."
-
     distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | apt-key add -
     curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | tee /etc/apt/sources.list.d/libnvidia-container.list
@@ -85,18 +82,24 @@ if [ "$install_gpu_drivers" = true ]; then
 
     echo "NVIDIA CUDA toolkit and container runtime installation completed."
 
-    ### update nvidia runtime config - execute on worker nodes hosting gpu
- 
-    # Path to the NVIDIA container runtime configuration file
+    # Update nvidia runtime config
     CONFIG_FILE="/etc/nvidia-container-runtime/config.toml"
 
-    # Check if the file exists
-    if [ ! -f "$CONFIG_FILE" ]; then
-        echo "Configuration file not found: $CONFIG_FILE"
-        exit 1
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "Updating NVIDIA runtime configuration..."
+        sed -i 's/#accept-nvidia-visible-devices-as-volume-mounts = false/accept-nvidia-visible-devices-as-volume-mounts = true/' "$CONFIG_FILE"
+        sed -i 's/#accept-nvidia-visible-devices-envvar-when-unprivileged = true/accept-nvidia-visible-devices-envvar-when-unprivileged = false/' "$CONFIG_FILE"
+    else
+        echo "NVIDIA runtime configuration file not found."
     fi
-
-    # Use sed to uncomment and set the desired values
-    sed -i 's/#accept-nvidia-visible-devices-as-volume-mounts = false/accept-nvidia-visible-devices-as-volume-mounts = true/' "$CONFIG_FILE"
-    sed -i 's/#accept-nvidia-visible-devices-envvar-when-unprivileged = true/accept-nvidia-visible-devices-envvar-when-unprivileged = false/' "$CONFIG_FILE"
 fi
+
+# Persistent storage support with Rook-Ceph if enabled
+if [ "$install_storage_support" = true ]; then
+    echo "Persistent storage support enabled, installing necessary packages..."
+    apt-get update
+    apt-get install -y lvm2
+    echo "LVM package installed for persistent storage support."
+fi
+
+echo "Worker node setup completed."

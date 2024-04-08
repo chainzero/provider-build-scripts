@@ -57,6 +57,7 @@ echo "K3s token for worker nodes: $token"
 # Install provider-services on master
 echo "Installing provider-services..."
 cd ~
+apt-get update
 apt-get install -y jq unzip
 curl -sfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | bash
 

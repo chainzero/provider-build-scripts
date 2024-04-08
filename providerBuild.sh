@@ -1,10 +1,13 @@
+### todos
+### add values.yaml config for inventory operator to update storage type/class
+### update docs for persistent storage
+
 #!/usr/bin/env bash
 
 # Provider Setup Script
 
 # Usage instructions
-# "Usage: $0 -a ACCOUNT_ADDRESS -k KEY_PASSWORD -d DOMAIN -n NODE [-g -w 'worker1,worker2'] [-p]"
-# "Example: $0 -a akash1mtnuc449l0mckz4cevs835qg72nvqwlul5wzyf -k akash -d akashtesting.xyz -n http://akash-node-1:26657 -g -w worker1,worker2 -p"
+# ./providerBuild.sh -a akash1mtnuc449l0mckz4cevs835qg72nvqwlul5wzyf -k akashprovider -d akashtesting.xyz -n http://akash-node-1:26657  -g -w worker -s -p
 
 # Initialize variables with default values or empty
 ACCOUNT_ADDRESS=""
@@ -13,10 +16,11 @@ DOMAIN=""
 NODE=""
 install_gpu_support=false
 gpu_nodes=()
+install_storage_support=false
 use_pricing_script=false
 
 # Process command-line options
-while getopts ":a:k:d:n:gw:p" opt; do
+while getopts ":a:k:d:n:gw:sp" opt; do
   case ${opt} in
     a )
       ACCOUNT_ADDRESS=$OPTARG
@@ -33,11 +37,14 @@ while getopts ":a:k:d:n:gw:p" opt; do
     g )
       install_gpu_support=true
       ;;
-    p )
-      use_pricing_script=true
-      ;;
     w )
       IFS=',' read -r -a gpu_nodes <<< "$OPTARG"
+      ;;
+    s )
+      install_storage_support=true
+      ;;
+    p )
+      use_pricing_script=true
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -75,7 +82,7 @@ rm -rf linux-amd64 helm-v3.11.0-linux-amd64.tar.gz
 
 # Setup Helm repositories
 echo "Setting up Helm repositories..."
-helm repo remove akash 2>/dev/null || true # Ignore errors if the repo is not found
+helm repo remove akash 2>/dev/null || true
 helm repo add akash https://akash-network.github.io/helm-charts
 helm repo update
 
@@ -111,15 +118,28 @@ attributes:
     value: "akashtesting"
   - key: capabilities/gpu/vendor/nvidia/model/t4
     value: true
+  - key: capabilities/storage/1/class
+    value: beta3
+  - key: capabilities/storage/1/persistent
+    value: true
+price_target_cpu: 1.60
+price_target_memory: 0.80
+price_target_hd_ephemeral: 0.02
+price_target_hd_pers_hdd: 0.01
+price_target_hd_pers_ssd: 0.03
+price_target_hd_pers_nvme: 0.04
+price_target_endpoint: 0.05
+price_target_ip: 5
+price_target_gpu_mappings: "t4=80"
 EOF
 
 echo "Provider configuration prepared."
 
-# Download and prepare the pricing script if the -p option is used
+# If pricing script option is used
 if [ "$use_pricing_script" = true ]; then
-    echo "Downloading custom pricing script..."
-    wget https://raw.githubusercontent.com/akash-network/helm-charts/main/charts/akash-provider/scripts/price_script_generic.sh
-    PRICING_SCRIPT_B64="$(cat price_script_generic.sh | openssl base64 -A)"
+    echo "Downloading and preparing custom pricing script..."
+    wget https://raw.githubusercontent.com/akash-network/helm-charts/main/charts/akash-provider/scripts/price_script_generic.sh -O ~/provider/price_script_generic.sh
+    PRICING_SCRIPT_B64=$(cat ~/provider/price_script_generic.sh | openssl base64 -A)
 fi
 
 # Install CRDs for Akash provider
@@ -129,9 +149,9 @@ kubectl apply -f https://raw.githubusercontent.com/akash-network/provider/v0.5.4
 # Install Akash provider with or without the pricing script
 echo "Installing Akash provider..."
 if [ "$use_pricing_script" = true ]; then
-    helm install akash-provider akash/provider -n akash-services -f provider.yaml --set bidpricescript="$PRICING_SCRIPT_B64"
+    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set bidpricescript="$PRICING_SCRIPT_B64"
 else
-    helm install akash-provider akash/provider -n akash-services -f provider.yaml
+    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml
 fi
 
 echo "Akash provider installation completed."
@@ -171,33 +191,30 @@ kubectl label ns ingress-nginx app.kubernetes.io/name=ingress-nginx app.kubernet
 kubectl label ingressclass akash-ingress-class akash.network=true
 echo "NGINX Ingress Controller installation completed."
 
-# Configure NVIDIA Runtime Engine if GPUs are part of the cluster
-if [ "$install_gpu_support" = true ]; then
-    echo "Configuring NVIDIA Runtime Engine..."
-    cat > nvidia-runtime-class.yaml << EOF
-kind: RuntimeClass
-apiVersion: node.k8s.io/v1
-metadata:
-  name: nvidia
-handler: nvidia
-EOF
-    kubectl apply -f nvidia-runtime-class.yaml
-    for node in "${gpu_nodes[@]}"; do
-        echo "Labeling $node for NVIDIA support..."
-        kubectl label nodes "$node" allow-nvdp=true --overwrite
-    done
-    echo "Adding NVIDIA Device Plugin Helm repository..."
-    helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
+# If storage support is enabled, add Rook-Ceph Helm repository, install Rook-Ceph operator, and cluster
+if [ "$install_storage_support" = true ]; then
+    echo "Adding Rook-Ceph Helm repository for persistent storage support..."
+    helm repo add rook-release https://charts.rook.io/release
     helm repo update
-    echo "Installing NVIDIA Device Plugin..."
-    helm upgrade -i nvdp nvdp/nvidia-device-plugin \
-      --namespace nvidia-device-plugin \
-      --create-namespace \
-      --version 0.14.5 \
-      --set runtimeClassName="nvidia" \
-      --set deviceListStrategy=volume-mounts \
-      --set-string nodeSelector.allow-nvdp="true"
-    echo "NVIDIA Runtime Engine configuration completed."
+    echo "Rook-Ceph repository added."
+
+    # Install the Rook-Ceph Helm chart for the operator
+    echo "Installing Rook-Ceph operator..."
+    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.14.0
+    echo "Rook-Ceph operator installation completed."
+
+    # Install the Rook-Ceph cluster
+    echo "Installing Rook-Ceph cluster..."
+    helm install --create-namespace -n rook-ceph rook-ceph-cluster \
+       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.14.0 \
+       -f ~/provider/rook-ceph-cluster.values.yml
+    echo "Rook-Ceph cluster installation completed."
+
+    # Label the StorageClass
+    echo "Labeling StorageClass for Akash integration..."
+    kubectl label sc beta3 akash.network=true
+    echo "StorageClass labeled for Akash integration."
 fi
 
 echo "Provider setup completed."
+
