@@ -18,9 +18,10 @@ install_gpu_support=false
 gpu_nodes=()
 install_storage_support=false
 use_pricing_script=false
+storage_class_name=""
 
 # Process command-line options
-while getopts ":a:k:d:n:gw:sp" opt; do
+while getopts ":a:k:d:n:gw:spb:" opt; do
   case ${opt} in
     a )
       ACCOUNT_ADDRESS=$OPTARG
@@ -45,6 +46,9 @@ while getopts ":a:k:d:n:gw:sp" opt; do
       ;;
     p )
       use_pricing_script=true
+      ;;
+    b )
+      storage_class_name=$OPTARG
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -226,7 +230,7 @@ EOF
     echo "NVIDIA Runtime Engine configuration completed."
 fi
 
-# If storage support is enabled, add Rook-Ceph Helm repository, install Rook-Ceph operator, and cluster
+# If storage support is enabled, configure Rook-Ceph and update the custom controller if needed
 if [ "$install_storage_support" = true ]; then
     echo "Adding Rook-Ceph Helm repository for persistent storage support..."
     helm repo add rook-release https://charts.rook.io/release
@@ -246,9 +250,19 @@ if [ "$install_storage_support" = true ]; then
     echo "Rook-Ceph cluster installation completed."
 
     # Label the StorageClass
-    echo "Labeling StorageClass for Akash integration..."
-    kubectl label sc beta3 akash.network=true
-    echo "StorageClass labeled for Akash integration."
+    if [ -n "$storage_class_name" ]; then
+        echo "Labeling StorageClass $storage_class_name for Akash integration..."
+        kubectl label sc "$storage_class_name" akash.network=true
+        echo "StorageClass $storage_class_name labeled for Akash integration."
+
+        # Update the inventory operator if the storage class is not 'beta3' which is the default in the operator helm chart
+        if [ "$storage_class_name" != "beta3" ]; then
+            echo "Updating the inventory operator to use storage class $storage_class_name..."
+            helm upgrade inventory-operator akash/akash-inventory-operator -n akash-services \
+                --set inventoryConfig.cluster_storage[0]=default,inventoryConfig.cluster_storage[1]=$storage_class_name,inventoryConfig.cluster_storage[2]=ram
+            echo "Inventory operator updated to use storage class $storage_class_name."
+        fi
+    fi
 fi
 
 echo "Provider setup completed."
