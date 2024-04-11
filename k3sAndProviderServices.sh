@@ -5,15 +5,27 @@
 # Default values for options
 disable_components="traefik"
 external_ip=""
+testing_mode=false
+all_in_one_mode=false
+install_gpu_drivers=false
 
 # Process command-line options
-while getopts ":d:e:" opt; do
+while getopts ":d:e:tag" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
       ;;
     e )
       external_ip=$OPTARG
+      ;;
+    t )
+      testing_mode=true
+      ;;
+    a )
+      all_in_one_mode=true
+      ;;
+    g )
+      install_gpu_drivers=true
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -46,7 +58,6 @@ fi
 
 # Validate health of master node with retry mechanism
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-
 echo "Checking the health of the master node..."
 max_attempts=3
 attempt=1
@@ -65,10 +76,42 @@ while [ $attempt -le $max_attempts ]; do
     ((attempt++))
 done
 
-# Retrieve and echo the K3s token
-echo "Retrieving K3s token for worker nodes..."
-token=$(cat /var/lib/rancher/k3s/server/node-token)
-echo "K3s token for worker nodes: $token"
+# GPU host prep, driver, and toolkit install
+if [ "$install_gpu_drivers" = true ]; then
+    echo "Starting GPU host preparation, driver, and toolkit installation..."
+
+    apt update
+    DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
+    apt-get autoremove -y
+
+    echo "Installing NVIDIA drivers..."
+    apt-get install -y ubuntu-drivers-common
+    ubuntu-drivers devices
+    ubuntu-drivers autoinstall
+
+    echo "NVIDIA GPU drivers installation completed."
+
+    echo "Installing NVIDIA CUDA toolkit and container runtime..."
+    distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+    curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | apt-key add -
+    curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | tee /etc/apt/sources.list.d/libnvidia-container.list
+
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-cuda-toolkit nvidia-container-toolkit nvidia-container-runtime
+
+    echo "NVIDIA CUDA toolkit and container runtime installation completed."
+
+    # Update nvidia runtime config
+    CONFIG_FILE="/etc/nvidia-container-runtime/config.toml"
+
+    if [ -f "$CONFIG_FILE" ]; then
+        echo "Updating NVIDIA runtime configuration..."
+        sed -i 's/#accept-nvidia-visible-devices-as-volume-mounts = false/accept-nvidia-visible-devices-as-volume-mounts = true/' "$CONFIG_FILE"
+        sed -i 's/#accept-nvidia-visible-devices-envvar-when-unprivileged = true/accept-nvidia-visible-devices-envvar-when-unprivileged = false/' "$CONFIG_FILE"
+    else
+        echo "NVIDIA runtime configuration file not found."
+    fi
+fi
 
 # Install provider-services on master
 echo "Installing provider-services..."
@@ -109,5 +152,12 @@ kubectl label ns akash-services akash.network/name=akash-services akash.network=
 kubectl label ns lease akash.network=true --overwrite
 
 echo "Kubernetes namespaces and labels have been set up."
+
+# Retrieve and echo the K3s token, unless in all-in-one mode
+if [ "$all_in_one_mode" = false ]; then
+    echo "Retrieving K3s token for worker nodes..."
+    token=$(cat /var/lib/rancher/k3s/server/node-token)
+    echo "K3s token for worker nodes: $token"
+fi
 
 echo "Please proceed with Akash provider account creation/import and export/storage of private key before running the next script."
