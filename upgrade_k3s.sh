@@ -18,12 +18,12 @@ while getopts ":d" opt; do
   esac
 done
 
-# Function to get the currently installed version of K3s
+# Query urrently installed version of K3s
 get_current_version() {
   k3s --version 2>&1 | awk '{print $3}' | tr -d 'v'
 }
 
-# Function to fetch the latest stable version from GitHub
+# Determine the latest stable version from GitHub
 get_latest_version() {
   curl -s https://api.github.com/repos/k3s-io/k3s/releases/latest | grep 'tag_name' | cut -d '"' -f 4 | tr -d 'v'
 }
