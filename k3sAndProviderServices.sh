@@ -41,12 +41,17 @@ shift $((OPTIND -1))
 
 # Install K3s master node
 echo "Starting K3s installation on master node..."
-install_exec="--disable=${disable_components}"
+install_exec="--disable=${disable_components} --flannel-backend=none"
 if [[ -n "$external_ip" ]]; then
     install_exec+=" --tls-san=${external_ip}"
 fi
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
 echo "K3s installation completed."
+
+# Install Calico
+echo "Installing Calico CNI..."
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+echo "Calico CNI installation completed."
 
 # If an external IP is specified, update the kubeconfig file
 if [[ -n "$external_ip" ]]; then
