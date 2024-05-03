@@ -8,9 +8,12 @@ external_ip=""
 testing_mode=false
 all_in_one_mode=false
 install_gpu_drivers=false
+mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
+master_ip=""
+token=""
 
 # Process command-line options
-while getopts ":d:e:tag" opt; do
+while getopts ":d:e:tagm:c:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -27,6 +30,13 @@ while getopts ":d:e:tag" opt; do
     g )
       install_gpu_drivers=true
       ;;
+    m )
+      master_ip=$OPTARG
+      ;;
+    c )
+      token=$OPTARG
+      mode="add"
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
@@ -39,21 +49,30 @@ while getopts ":d:e:tag" opt; do
 done
 shift $((OPTIND -1))
 
-# Install K3s master node
-echo "Starting K3s installation on master node..."
-install_exec="--disable=${disable_components} --flannel-backend=none"
-if [[ -n "$external_ip" ]]; then
-    install_exec+=" --tls-san=${external_ip}"
+if [[ "$mode" == "init" ]]; then
+    echo "Starting initial K3s installation on master node..."
+    install_exec="--disable=${disable_components} --flannel-backend=none --cluster-init"
+    if [[ -n "$external_ip" ]]; then
+        install_exec+=" --tls-san=${external_ip}"
+    fi
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
+    echo "K3s installation completed."
+    token=$(cat /var/lib/rancher/k3s/server/token)
+    echo "K3s control-plane and worker node token: $token"
+    echo "Installing Calico CNI..."
+    kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+    echo "Calico CNI installation completed."
+else
+    if [[ -z "$master_ip" || -z "$token" ]]; then
+        echo "Both master IP (-m) and token (-c) must be provided to add a control-plane node."
+        exit 1
+    fi
+    echo "Adding a new control-plane node to the cluster..."
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --flannel-backend=none --node-taint CriticalAddonsOnly=true:NoExecute" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    echo "Control-plane node added to the cluster."
 fi
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
-echo "K3s installation completed."
 
-# Install Calico
-echo "Installing Calico CNI..."
-kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
-echo "Calico CNI installation completed."
-
-# If an external IP is specified, update the kubeconfig file
+# Update the kubeconfig file if an external IP is specified
 if [[ -n "$external_ip" ]]; then
     KUBECONFIG=/etc/rancher/k3s/k3s.yaml
     echo "Updating kubeconfig file to use external IP address..."
@@ -61,54 +80,25 @@ if [[ -n "$external_ip" ]]; then
     echo "kubeconfig file updated to use external IP address."
 fi
 
-# Validate health of master node with retry mechanism
-export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-echo "Checking the health of the master node..."
-max_attempts=3
-attempt=1
-while [ $attempt -le $max_attempts ]; do
-    if kubectl get nodes | grep -q ' Ready'; then
-        echo "Master node is ready."
-        break
-    else
-        echo "Master node is not ready yet, retrying in 10 seconds... (Attempt $attempt of $max_attempts)"
-        sleep 10
-    fi
-    if [ $attempt -eq $max_attempts ]; then
-        echo "Script exited - master node is not ready after $max_attempts attempts - please check status/logs of master node"
-        exit 1
-    fi
-    ((attempt++))
-done
-
 # GPU host prep, driver, and toolkit install
 if [ "$install_gpu_drivers" = true ]; then
     echo "Starting GPU host preparation, driver, and toolkit installation..."
-
     apt update
     DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
     apt-get autoremove -y
-
     echo "Installing NVIDIA drivers..."
     apt-get install -y ubuntu-drivers-common
     ubuntu-drivers devices
     ubuntu-drivers autoinstall
-
     echo "NVIDIA GPU drivers installation completed."
-
     echo "Installing NVIDIA CUDA toolkit and container runtime..."
     distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | apt-key add -
     curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | tee /etc/apt/sources.list.d/libnvidia-container.list
-
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-cuda-toolkit nvidia-container-toolkit nvidia-container-runtime
-
     echo "NVIDIA CUDA toolkit and container runtime installation completed."
-
-    # Update nvidia runtime config
     CONFIG_FILE="/etc/nvidia-container-runtime/config.toml"
-
     if [ -f "$CONFIG_FILE" ]; then
         echo "Updating NVIDIA runtime configuration..."
         sed -i 's/#accept-nvidia-visible-devices-as-volume-mounts = false/accept-nvidia-visible-devices-as-volume-mounts = true/' "$CONFIG_FILE"
@@ -124,11 +114,9 @@ cd ~
 apt-get update
 apt-get install -y jq unzip
 curl -sfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | bash
-
 # Add /root/bin to the path for the current session
 NEW_PATH="/root/bin"
 export PATH="$PATH:$NEW_PATH"
-
 # Validate provider-services installation
 echo "Validating provider-services installation..."
 provider_services_version=$(provider-services version 2>&1)
@@ -139,10 +127,8 @@ else
     exit 1
 fi
 
-# Create Kubernetes namespaces and labels
+# Create and label Kubernetes namespaces
 echo "Creating and labeling Kubernetes namespaces..."
-
-# Check if the namespace exists before creating
 for ns in akash-services lease; do
     if kubectl get ns $ns > /dev/null 2>&1; then
         echo "Namespace $ns already exists."
@@ -151,18 +137,12 @@ for ns in akash-services lease; do
         echo "Namespace $ns created."
     fi
 done
-
-# Apply labels to namespaces
 kubectl label ns akash-services akash.network/name=akash-services akash.network=true --overwrite
 kubectl label ns lease akash.network=true --overwrite
 
-echo "Kubernetes namespaces and labels have been set up."
-
-# Retrieve and echo the K3s token, unless in all-in-one mode
-if [ "$all_in_one_mode" = false ]; then
-    echo "Retrieving K3s token for worker nodes..."
-    token=$(cat /var/lib/rancher/k3s/server/node-token)
-    echo "K3s token for worker nodes: $token"
+# Only output the Akash provider message if this is the initial setup
+if [[ "$all_in_one_mode" == "false" && "$mode" == "init" ]]; then
+    echo "Please proceed with Akash provider account creation/import and export/storage of private key before running the next script."
 fi
 
-echo "Please proceed with Akash provider account creation/import and export/storage of private key before running the next script."
+echo "Setup completed."
