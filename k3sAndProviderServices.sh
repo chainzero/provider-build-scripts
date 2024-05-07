@@ -13,7 +13,7 @@ master_ip=""
 token=""
 
 # Process command-line options
-while getopts ":d:e:tagm:c:" opt; do
+while getopts ":d:e:tagm:c:r:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -37,6 +37,9 @@ while getopts ":d:e:tagm:c:" opt; do
       token=$OPTARG
       mode="add"
       ;;
+    r )
+      remove_node_ip=$OPTARG
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
@@ -49,6 +52,52 @@ while getopts ":d:e:tagm:c:" opt; do
 done
 shift $((OPTIND -1))
 
+# Remove control plane node logic
+
+if [[ -n "$remove_node_ip" ]]; then
+    # Check if kubectl is available
+    if ! command -v kubectl &> /dev/null; then
+        echo "kubectl command could not be found, please install it to proceed."
+        exit 1
+    fi
+
+    # Check if etcdctl is available
+    if ! command -v etcdctl &> /dev/null; then
+        echo "etcdctl command could not be found, attempting to install it..."
+        apt update
+        apt install -y etcd-client
+        if ! command -v etcdctl &> /dev/null; then
+            echo "Failed to install etcdctl, please install it manually."
+            exit 1
+        fi
+    fi
+
+    # Validate node exists
+    if ! kubectl get node "$remove_node_ip" &> /dev/null; then
+        echo "Specified node does not exist in the cluster."
+        exit 1
+    fi
+
+    echo "Draining the node..."
+    kubectl drain --ignore-daemonsets --delete-local-data $remove_node_ip || { echo "Failed to drain node"; exit 1; }
+
+    echo "Removing the node from the cluster..."
+    kubectl delete node $remove_node_ip || { echo "Failed to delete node"; exit 1; }
+
+    # If etcd member needs to be removed:
+    echo "Removing the etcd member..."
+    etcd_member_id=$(etcdctl member list | grep $remove_node_ip | awk '{print $1}')
+    if [ -n "$etcd_member_id" ]; then
+        etcdctl member remove $etcd_member_id || { echo "Failed to remove etcd member"; exit 1; }
+    else
+        echo "No etcd member found for the specified IP."
+    fi
+
+    echo "Control plane node removed successfully."
+    exit 0
+fi
+
+# Add control plane node logic
 if [[ "$mode" == "init" ]]; then
     echo "Starting initial K3s installation on master node..."
     install_exec="--disable=${disable_components} --flannel-backend=none --cluster-init"
