@@ -62,13 +62,49 @@ if [[ "$mode" == "init" ]]; then
     echo "Installing Calico CNI..."
     kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
     echo "Calico CNI installation completed."
+
+    # Install provider-services on master
+    echo "Installing provider-services..."
+    cd ~
+    apt-get update
+    apt-get install -y jq unzip
+    curl -sfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | bash
+    # Add /root/bin to the path for the current session
+    NEW_PATH="/root/bin"
+    export PATH="$PATH:$NEW_PATH"
+    # Validate provider-services installation
+    echo "Validating provider-services installation..."
+    provider_services_version=$(provider-services version 2>&1)
+    if [[ "$provider_services_version" =~ ^v ]]; then
+        echo "Provider-services is successfully installed. Version: $provider_services_version"
+    else
+        echo "Provider-services installation failed or not accessible in the PATH."
+        exit 1
+    fi
+
+    # Create and label Kubernetes namespaces
+    echo "Creating and labeling Kubernetes namespaces..."
+    for ns in akash-services lease; do
+        if kubectl get ns $ns > /dev/null 2>&1; then
+            echo "Namespace $ns already exists."
+        else
+            kubectl create ns $ns
+            echo "Namespace $ns created."
+        fi
+    done
+    kubectl label ns akash-services akash.network/name=akash-services akash.network=true --overwrite
+    kubectl label ns lease akash.network=true --overwrite
+
+    if [[ "$all_in_one_mode" == "false" ]]; then
+        echo "Please proceed with Akash provider account creation/import and export/storage of private key before running the next script."
+    fi
 else
     if [[ -z "$master_ip" || -z "$token" ]]; then
         echo "Both master IP (-m) and token (-c) must be provided to add a control-plane node."
         exit 1
     fi
     echo "Adding a new control-plane node to the cluster..."
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --flannel-backend=none --node-taint CriticalAddonsOnly=true:NoExecute" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --flannel-backend=none" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 
@@ -106,43 +142,6 @@ if [ "$install_gpu_drivers" = true ]; then
     else
         echo "NVIDIA runtime configuration file not found."
     fi
-fi
-
-# Install provider-services on master
-echo "Installing provider-services..."
-cd ~
-apt-get update
-apt-get install -y jq unzip
-curl -sfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | bash
-# Add /root/bin to the path for the current session
-NEW_PATH="/root/bin"
-export PATH="$PATH:$NEW_PATH"
-# Validate provider-services installation
-echo "Validating provider-services installation..."
-provider_services_version=$(provider-services version 2>&1)
-if [[ "$provider_services_version" =~ ^v ]]; then
-    echo "Provider-services is successfully installed. Version: $provider_services_version"
-else
-    echo "Provider-services installation failed or not accessible in the PATH."
-    exit 1
-fi
-
-# Create and label Kubernetes namespaces
-echo "Creating and labeling Kubernetes namespaces..."
-for ns in akash-services lease; do
-    if kubectl get ns $ns > /dev/null 2>&1; then
-        echo "Namespace $ns already exists."
-    else
-        kubectl create ns $ns
-        echo "Namespace $ns created."
-    fi
-done
-kubectl label ns akash-services akash.network/name=akash-services akash.network=true --overwrite
-kubectl label ns lease akash.network=true --overwrite
-
-# Only output the Akash provider message if this is the initial setup
-if [[ "$all_in_one_mode" == "false" && "$mode" == "init" ]]; then
-    echo "Please proceed with Akash provider account creation/import and export/storage of private key before running the next script."
 fi
 
 echo "Setup completed."
