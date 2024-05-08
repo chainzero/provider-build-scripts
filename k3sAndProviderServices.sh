@@ -13,7 +13,7 @@ master_ip=""
 token=""
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:" opt; do
+while getopts ":d:e:tagm:c:r:w:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -40,6 +40,9 @@ while getopts ":d:e:tagm:c:r:" opt; do
     r )
       remove_node_ip=$OPTARG
       ;;
+    w )
+      remove_worker_ip=$OPTARG
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
@@ -53,7 +56,6 @@ done
 shift $((OPTIND -1))
 
 # Remove control plane node logic
-
 if [[ -n "$remove_node_ip" ]]; then
     # Check if kubectl is available
     if ! command -v kubectl &> /dev/null; then
@@ -94,6 +96,23 @@ if [[ -n "$remove_node_ip" ]]; then
     fi
 
     echo "Control plane node removed successfully."
+    exit 0
+fi
+
+# Remove worker node logic
+if [[ -n "$remove_worker_ip" ]]; then
+    if ! kubectl get node "$remove_worker_ip" &> /dev/null; then
+        echo "Specified worker node does not exist in the cluster."
+        exit 1
+    fi
+
+    echo "Draining the worker node..."
+    kubectl drain "$remove_worker_ip" --ignore-daemonsets --delete-local-data --force || { echo "Failed to drain worker node"; exit 1; }
+
+    echo "Deleting the worker node from the cluster..."
+    kubectl delete node "$remove_worker_ip" || { echo "Failed to delete worker node"; exit 1; }
+
+    echo "Worker node removed successfully."
     exit 0
 fi
 
