@@ -1,19 +1,15 @@
-### todos
-### add values.yaml config for inventory operator to update storage type/class
-### update docs for persistent storage
-
 #!/usr/bin/env bash
 
 # Provider Setup Script
-
-# Usage instructions
-# ./providerBuild.sh -a akash1mtnuc449l0mckz4cevs835qg72nvqwlul5wzyf -k akashprovider -d akashtesting.xyz -n http://akash-node-1:26657  -g -w worker -s -p
 
 # Initialize variables with default values or empty
 ACCOUNT_ADDRESS=""
 KEY_PASSWORD=""
 DOMAIN=""
 NODE=""
+chain_id="akashnet-2"  # Default chain ID
+provider_version="0.6.1"  # Default provider image version
+node_version="0.34.1"  # Default node image version
 install_gpu_support=false
 gpu_nodes=()
 install_storage_support=false
@@ -21,7 +17,7 @@ use_pricing_script=false
 storage_class_name=""
 
 # Process command-line options
-while getopts ":a:k:d:n:gw:spb:" opt; do
+while getopts ":a:k:d:n:gw:spbc:v:x:y:" opt; do
   case ${opt} in
     a )
       ACCOUNT_ADDRESS=$OPTARG
@@ -49,6 +45,15 @@ while getopts ":a:k:d:n:gw:spb:" opt; do
       ;;
     b )
       storage_class_name=$OPTARG
+      ;;
+    c )
+      chain_id=$OPTARG  # User specified chain ID
+      ;;
+    v )
+      provider_version=$OPTARG  # User specified provider image version
+      ;;
+    x )
+      node_version=$OPTARG  # User specified node image version
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -94,9 +99,12 @@ echo "Helm and Akash repository setup completed."
 
 # Install Akash services using Helm
 echo "Installing Akash services..."
-helm install akash-hostname-operator akash/akash-hostname-operator -n akash-services
-helm install inventory-operator akash/akash-inventory-operator -n akash-services
-helm install akash-node akash/akash-node -n akash-services
+helm install akash-hostname-operator akash/akash-hostname-operator -n akash-services --set image.tag=$provider_version
+helm install inventory-operator akash/akash-inventory-operator -n akash-services --set image.tag=$provider_version
+helm install akash-node akash/akash-node -n akash-services --set image.tag=$node_version
+helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set image.tag=$provider_version
+
+echo "Akash services installed."
 
 # Prepare provider configuration
 echo "Preparing provider configuration..."
@@ -111,30 +119,7 @@ keysecret: "$(echo $KEY_PASSWORD | openssl base64 -A)"
 domain: "$DOMAIN"
 node: "$NODE"
 withdrawalperiod: 12h
-attributes:
-  - key: region
-    value: "us-east" 
-  - key: host
-    value: akash
-  - key: tier
-    value: community
-  - key: organization
-    value: "akashtesting"
-  - key: capabilities/gpu/vendor/nvidia/model/t4
-    value: true
-  - key: capabilities/storage/1/class
-    value: beta3
-  - key: capabilities/storage/1/persistent
-    value: true
-price_target_cpu: 1.60
-price_target_memory: 0.80
-price_target_hd_ephemeral: 0.02
-price_target_hd_pers_hdd: 0.01
-price_target_hd_pers_ssd: 0.03
-price_target_hd_pers_nvme: 0.04
-price_target_endpoint: 0.05
-price_target_ip: 5
-price_target_gpu_mappings: "t4=80"
+chainid: "$chain_id"
 EOF
 
 echo "Provider configuration prepared."
@@ -148,14 +133,14 @@ fi
 
 # Install CRDs for Akash provider
 echo "Installing CRDs for Akash provider..."
-kubectl apply -f https://raw.githubusercontent.com/akash-network/provider/v0.5.4/pkg/apis/akash.network/crd.yaml
+kubectl apply -f https://raw.githubusercontent.com/akash-network/provider/v${provider_version}/pkg/apis/akash.network/crd.yaml
 
 # Install Akash provider with or without the pricing script
 echo "Installing Akash provider..."
 if [ "$use_pricing_script" = true ]; then
-    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set bidpricescript="$PRICING_SCRIPT_B64"
+    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set bidpricescript="$PRICING_SCRIPT_B64" --set image.tag=$provider_version
 else
-    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml
+    helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set image.tag=$provider_version
 fi
 
 echo "Akash provider installation completed."
@@ -266,4 +251,3 @@ if [ "$install_storage_support" = true ]; then
 fi
 
 echo "Provider setup completed."
-
