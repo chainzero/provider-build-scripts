@@ -8,13 +8,30 @@ KEY_PASSWORD=""
 DOMAIN=""
 NODE=""
 chain_id="akashnet-2"  # Default chain ID
-provider_version="0.6.1"  # Default provider image version
-node_version="0.34.1"  # Default node image version
+provider_version=""  # Will be fetched from Helm Chart
+node_version=""  # Will be fetched from Helm Chart
 install_gpu_support=false
 gpu_nodes=()
 install_storage_support=false
 use_pricing_script=false
 storage_class_name=""
+
+# Function to fetch appVersion from Helm Chart
+fetch_app_version() {
+  local chart_url=$1
+  local version_field="appVersion"
+  curl -s $chart_url | grep "^$version_field:" | awk '{print $2}'
+}
+
+# Fetch the latest provider version and node version
+provider_version=$(fetch_app_version "https://raw.githubusercontent.com/akash-network/helm-charts/main/charts/akash-provider/Chart.yaml")
+node_version=$(fetch_app_version "https://raw.githubusercontent.com/akash-network/helm-charts/main/charts/akash-node/Chart.yaml")
+
+# Check if versions were fetched successfully
+if [ -z "$provider_version" ] || [ -z "$node_version" ]; then
+  echo "Failed to fetch the latest versions. Please check the Helm Chart URLs."
+  exit 1
+fi
 
 # Process command-line options
 while getopts ":a:k:d:n:gw:spbc:v:x:y:" opt; do
