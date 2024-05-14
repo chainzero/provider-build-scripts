@@ -116,6 +116,75 @@ if [[ -n "$remove_worker_ip" ]]; then
     exit 0
 fi
 
+# Function to update CoreDNS with 8.8.8.8 8.8.4.4 servers
+update_coredns_config() {
+    echo "Updating CoreDNS configuration..."
+    kubectl -n kube-system get cm coredns -o json | jq '.data.Corefile = 
+    ".:53 {
+        errors
+        health
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+        }
+        prometheus :9153
+        forward . 8.8.8.8 8.8.4.4
+        cache 30
+        loop
+        reload
+        loadbalance
+        import /etc/coredns/custom/*.override
+    }
+    import /etc/coredns/custom/*.server"' | kubectl apply -f -
+    echo "CoreDNS configuration updated."
+}
+
+create_coredns_daemonset() {
+    echo "Creating CoreDNS DaemonSet..."
+    kubectl delete deployment coredns -n kube-system  # Remove existing CoreDNS Deployment
+    cat <<EOF | kubectl apply -f -
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: coredns
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-dns
+    spec:
+      containers:
+      - name: coredns
+        image: coredns/coredns:latest
+        resources:
+          limits:
+            memory: 170Mi
+            cpu: 100m
+          requests:
+            memory: 70Mi
+            cpu: 10m
+        args: ["-conf", "/etc/coredns/Corefile"]
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/coredns
+      volumes:
+      - name: config-volume
+        configMap:
+          name: coredns
+          items:
+          - key: Corefile
+            path: Corefile
+EOF
+    echo "CoreDNS DaemonSet created."
+}
+
 # Add control plane node logic
 if [[ "$mode" == "init" ]]; then
     echo "Starting initial K3s installation on master node..."
@@ -131,11 +200,20 @@ if [[ "$mode" == "init" ]]; then
     kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
     echo "Calico CNI installation completed."
 
+    # Ensure jq is installed for JSON processing
+    if ! command -v jq &> /dev/null; then
+        echo "jq is not installed. Installing jq..."
+        apt-get update && apt-get install -y jq
+    fi
+
+    update_coredns_config  # Update the CoreDNS ConfigMap
+    # create_coredns_daemonset  # Create the CoreDNS DaemonSet
+
     # Install provider-services on master
     echo "Installing provider-services..."
     cd ~
     apt-get update
-    apt-get install -y jq unzip
+    apt-get install -y unzip
     curl -sfL https://raw.githubusercontent.com/akash-network/provider/main/install.sh | bash
     # Add /root/bin to the path for the current session
     NEW_PATH="/root/bin"
