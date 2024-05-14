@@ -140,51 +140,6 @@ update_coredns_config() {
     echo "CoreDNS configuration updated."
 }
 
-create_coredns_daemonset() {
-    echo "Creating CoreDNS DaemonSet..."
-    kubectl delete deployment coredns -n kube-system  # Remove existing CoreDNS Deployment
-    cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: coredns
-  namespace: kube-system
-  labels:
-    k8s-app: kube-dns
-spec:
-  selector:
-    matchLabels:
-      k8s-app: kube-dns
-  template:
-    metadata:
-      labels:
-        k8s-app: kube-dns
-    spec:
-      containers:
-      - name: coredns
-        image: coredns/coredns:latest
-        resources:
-          limits:
-            memory: 170Mi
-            cpu: 100m
-          requests:
-            memory: 70Mi
-            cpu: 10m
-        args: ["-conf", "/etc/coredns/Corefile"]
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/coredns
-      volumes:
-      - name: config-volume
-        configMap:
-          name: coredns
-          items:
-          - key: Corefile
-            path: Corefile
-EOF
-    echo "CoreDNS DaemonSet created."
-}
-
 # Add control plane node logic
 if [[ "$mode" == "init" ]]; then
     echo "Starting initial K3s installation on master node..."
@@ -207,7 +162,6 @@ if [[ "$mode" == "init" ]]; then
     fi
 
     update_coredns_config  # Update the CoreDNS ConfigMap
-    # create_coredns_daemonset  # Create the CoreDNS DaemonSet
 
     # Install provider-services on master
     echo "Installing provider-services..."
