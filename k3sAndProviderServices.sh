@@ -147,6 +147,8 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$external_ip" ]]; then
         install_exec+=" --tls-san=${external_ip}"
     fi
+    internal_ip=$(hostname -I | awk '{print $1}')
+    install_exec+=" --tls-san=${internal_ip}"
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
     echo "K3s installation completed."
     token=$(cat /var/lib/rancher/k3s/server/token)
@@ -211,9 +213,18 @@ fi
 # Update the kubeconfig file if an external IP is specified
 if [[ -n "$external_ip" ]]; then
     KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    echo "Updating kubeconfig file to use external IP address..."
-    sed -i "s/127.0.0.1/$external_ip/g" $KUBECONFIG
-    echo "kubeconfig file updated to use external IP address."
+    echo "Updating kubeconfig file to use both internal and external IP addresses..."
+
+    # Create separate contexts for internal and external access
+    kubectl config set-cluster k3s-cluster --server=https://$internal_ip:6443 --insecure-skip-tls-verify=true
+    kubectl config set-cluster k3s-cluster-external --server=https://$external_ip:6443 --insecure-skip-tls-verify=true
+    kubectl config set-context internal --cluster=k3s-cluster --user=default
+    kubectl config set-context external --cluster=k3s-cluster-external --user=default
+
+    # Set the internal context as the default context
+    kubectl config use-context internal
+
+    echo "kubeconfig file updated to use both internal and external IP addresses, with internal as default."
 fi
 
 # GPU host prep, driver, and toolkit install
