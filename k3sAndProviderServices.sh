@@ -212,19 +212,41 @@ fi
 
 # Update the kubeconfig file if an external IP is specified
 if [[ -n "$external_ip" ]]; then
-    KUBECONFIG=/etc/rancher/k3s/k3s.yaml
     echo "Updating kubeconfig file to use both internal and external IP addresses..."
 
-    # Create separate contexts for internal and external access
-    kubectl config set-cluster k3s-cluster --server=https://$internal_ip:6443 --insecure-skip-tls-verify=true
-    kubectl config set-cluster k3s-cluster-external --server=https://$external_ip:6443 --insecure-skip-tls-verify=true
-    kubectl config set-context internal --cluster=k3s-cluster --user=default
-    kubectl config set-context external --cluster=k3s-cluster-external --user=default
+    # Define paths for the kubeconfig files
+    kubeconfig_path=/etc/rancher/k3s/k3s.yaml
 
-    # Set the internal context as the default context
-    kubectl config use-context internal
+    # Extract internal IP
+    internal_ip=$(hostname -I | awk '{print $1}')
 
-    echo "kubeconfig file updated to use both internal and external IP addresses, with internal as default."
+    # Extract the current certificate-authority-data
+    ca_data=$(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+
+    # Create a new kubeconfig content with both internal and external IPs
+    cat <<EOF > ${kubeconfig_path}
+apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: ${ca_data}
+    server: https://${external_ip}:6443
+  name: k3s-cluster
+contexts:
+- context:
+    cluster: k3s-cluster
+    user: default
+  name: default
+current-context: default
+kind: Config
+preferences: {}
+users:
+- name: default
+  user:
+    client-certificate-data: $(kubectl config view --raw -o jsonpath='{.users[0].user.client-certificate-data}')
+    client-key-data: $(kubectl config view --raw -o jsonpath='{.users[0].user.client-key-data}')
+EOF
+
+    echo "kubeconfig file updated to use both internal and external IP addresses with a single context."
 fi
 
 # GPU host prep, driver, and toolkit install
