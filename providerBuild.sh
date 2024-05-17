@@ -6,7 +6,7 @@
 ACCOUNT_ADDRESS=""
 KEY_PASSWORD=""
 DOMAIN=""
-NODE=""
+NODE="http://akash-node-1:26657"  # Default NODE value
 chain_id="akashnet-2"  # Default chain ID
 provider_version=""  # Will be fetched from Helm Chart
 node_version=""  # Will be fetched from Helm Chart
@@ -84,6 +84,13 @@ while getopts ":a:k:d:n:gw:spbc:v:x:y:" opt; do
 done
 shift $((OPTIND -1))
 
+# Set NODE based on chain_id if not explicitly set
+if [ "$chain_id" == "sandbox-01" ]; then
+  NODE="https://rpc.sandbox-01.aksh.pw:443"
+elif [ -z "$NODE" ]; then
+  NODE="http://akash-node-1:26657"
+fi
+
 # Check if all required options are provided
 if [ -z "$ACCOUNT_ADDRESS" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$DOMAIN" ] || [ -z "$NODE" ]; then
     echo "All options -a (account address), -k (key password), -d (domain), and -n (node) are required."
@@ -118,7 +125,12 @@ echo "Helm and Akash repository setup completed."
 echo "Installing Akash services..."
 helm install akash-hostname-operator akash/akash-hostname-operator -n akash-services --set image.tag=$provider_version
 helm install inventory-operator akash/akash-inventory-operator -n akash-services --set image.tag=$provider_version
-helm install akash-node akash/akash-node -n akash-services --set image.tag=$node_version
+
+# Conditionally install akash-node based on chain_id
+if [ "$chain_id" != "sandbox-01" ]; then
+  helm install akash-node akash/akash-node -n akash-services --set image.tag=$node_version
+fi
+
 helm install akash-provider akash/provider -n akash-services -f ~/provider/provider.yaml --set image.tag=$provider_version
 
 echo "Akash services installed."
