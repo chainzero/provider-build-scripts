@@ -6,7 +6,7 @@
 ACCOUNT_ADDRESS=""
 KEY_PASSWORD=""
 DOMAIN=""
-NODE="http://akash-node-1:26657"  # Default NODE value
+NODE=""  # Default to empty, will be set later based on chain_id or user input
 chain_id="akashnet-2"  # Default chain ID
 provider_version=""  # Will be fetched from Helm Chart
 node_version=""  # Will be fetched from Helm Chart
@@ -84,11 +84,13 @@ while getopts ":a:k:d:n:gw:spbc:v:x:y:" opt; do
 done
 shift $((OPTIND -1))
 
-# Set NODE based on chain_id if not explicitly set
-if [ "$chain_id" == "sandbox-01" ]; then
-  NODE="https://rpc.sandbox-01.aksh.pw:443"
-elif [ -z "$NODE" ]; then
-  NODE="http://akash-node-1:26657"
+# Set NODE based on chain_id if not explicitly set by the user
+if [ -z "$NODE" ]; then
+  if [ "$chain_id" == "sandbox-01" ]; then
+    NODE="https://rpc.sandbox-01.aksh.pw:443"
+  else
+    NODE="http://akash-node-1:26657"
+  fi
 fi
 
 # Check if all required options are provided
