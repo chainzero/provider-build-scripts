@@ -72,15 +72,15 @@ if [ "$install_gpu_drivers" = true ]; then
 
     echo "NVIDIA GPU drivers installation completed."
 
-    echo "Installing NVIDIA CUDA toolkit and container runtime..."
+    echo "Installing NVIDIA container runtime..."
     distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
     curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | apt-key add -
     curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | tee /etc/apt/sources.list.d/libnvidia-container.list
 
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-cuda-toolkit nvidia-container-toolkit nvidia-container-runtime
+    DEBIAN_FRONTEND=noninteractive apt-get install -y nvidia-container-toolkit nvidia-container-runtime
 
-    echo "NVIDIA CUDA toolkit and container runtime installation completed."
+    echo "NVIDIA container runtime installation completed."
 
     # Update nvidia runtime config
     CONFIG_FILE="/etc/nvidia-container-runtime/config.toml"
