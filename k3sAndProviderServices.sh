@@ -261,7 +261,7 @@ if [ "$install_gpu_drivers" = true ]; then
     ubuntu-drivers autoinstall
     echo "NVIDIA GPU drivers installation completed."
     echo "Installing NVIDIA container runtime..."
-    distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+    distribution="stable/deb"
     curl -s -L https://nvidia.github.io/libnvidia-container/gpgkey | apt-key add -
     curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | tee /etc/apt/sources.list.d/libnvidia-container.list
     apt-get update
