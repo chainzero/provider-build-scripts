@@ -11,9 +11,10 @@ install_gpu_drivers=false
 mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
 master_ip=""
 token=""
+internal_network=""
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:" opt; do
+while getopts ":d:e:tagm:c:r:w:n:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -43,6 +44,9 @@ while getopts ":d:e:tagm:c:r:w:" opt; do
     w )
       remove_worker_ip=$OPTARG
       ;;
+    n )
+      internal_network=$OPTARG
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
@@ -54,6 +58,26 @@ while getopts ":d:e:tagm:c:r:w:" opt; do
   esac
 done
 shift $((OPTIND -1))
+
+if [[ "$mode" == "init" ]] || [[ -n "$external_ip" ]]; then
+  if [[ -z "$internal_network" ]]; then
+      echo "Please provide the internal network using the -n option."
+      exit 1
+  fi
+
+  # Ensure only the first two octets (e.g., 172.18.) are used from the provided network
+  internal_network=$(echo "$internal_network" | cut -d'.' -f1,2)
+
+  # Detect the internal IP based on the first two octets of the provided network
+  internal_ip=$(hostname -I | tr ' ' '\n' | grep "^${internal_network}\." | head -n 1)
+
+  if [[ -z "$internal_ip" ]]; then
+      echo "No IP found in the network ${internal_network}. Please verify."
+      exit 1
+  fi
+
+  echo "Selected internal IP: $internal_ip"
+fi
 
 # Remove control plane node logic
 if [[ -n "$remove_node_ip" ]]; then
@@ -147,7 +171,6 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$external_ip" ]]; then
         install_exec+=" --tls-san=${external_ip}"
     fi
-    internal_ip=$(hostname -I | awk '{print $1}')
     install_exec+=" --tls-san=${internal_ip}"
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
     echo "K3s installation completed."
@@ -216,9 +239,6 @@ if [[ -n "$external_ip" ]]; then
 
     # Define paths for the kubeconfig files
     kubeconfig_path=/etc/rancher/k3s/k3s.yaml
-
-    # Extract internal IP
-    internal_ip=$(hostname -I | awk '{print $1}')
 
     # Extract the current certificate-authority-data
     ca_data=$(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
