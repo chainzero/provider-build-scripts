@@ -142,6 +142,7 @@ fi
 
 # Function to update CoreDNS with 8.8.8.8 1.1.1.1 servers
 update_coredns_config() {
+    while ! kubectl -n kube-system get cm coredns >/dev/null 2>&1; do echo waiting for the coredns configmap resource ...; sleep 2; done
     echo "Updating CoreDNS configuration..."
     kubectl -n kube-system get cm coredns -o json | jq '.data.Corefile = 
     ".:53 {
