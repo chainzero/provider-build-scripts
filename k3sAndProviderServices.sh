@@ -12,9 +12,10 @@ mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
 master_ip=""
 token=""
 internal_network=""
+tls_san="" # Example: provider.h100.sdg.val.akash.pub
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:n:" opt; do
+while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -46,6 +47,9 @@ while getopts ":d:e:tagm:c:r:w:n:" opt; do
       ;;
     n )
       internal_network=$OPTARG
+      ;;
+    s )
+      tls_san=$OPTARG
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -173,6 +177,9 @@ if [[ "$mode" == "init" ]]; then
         install_exec+=" --node-external-ip=${external_ip}"
     fi
     install_exec+=" --node-ip=${internal_ip}"
+    if [[ -n "$tls_san" ]]; then
+        install_exec+=" --tls-san=${tls_san}"
+    fi
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
     echo "K3s installation completed."
     token=$(cat /var/lib/rancher/k3s/server/token)
