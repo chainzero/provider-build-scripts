@@ -11,9 +11,11 @@ install_gpu_drivers=false
 mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
 master_ip=""
 token=""
+internal_network=""
+tls_san="" # Example: provider.h100.sdg.val.akash.pub
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:" opt; do
+while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -43,6 +45,12 @@ while getopts ":d:e:tagm:c:r:w:" opt; do
     w )
       remove_worker_ip=$OPTARG
       ;;
+    n )
+      internal_network=$OPTARG
+      ;;
+    s )
+      tls_san=$OPTARG
+      ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
@@ -54,6 +62,24 @@ while getopts ":d:e:tagm:c:r:w:" opt; do
   esac
 done
 shift $((OPTIND -1))
+
+if [[ -z "$internal_network" ]]; then
+    echo "Please provide the internal network using the -n option."
+    exit 1
+fi
+
+# Ensure only the first two octets (e.g., 172.18.) are used from the provided network
+internal_network=$(echo "$internal_network" | cut -d'.' -f1,2)
+
+# Detect the internal IP based on the first two octets of the provided network
+internal_ip=$(hostname -I | tr ' ' '\n' | grep "^${internal_network}\." | head -n 1)
+
+if [[ -z "$internal_ip" ]]; then
+    echo "No IP found in the network ${internal_network}. Please verify."
+    exit 1
+fi
+
+echo "Selected internal IP: $internal_ip"
 
 # Remove control plane node logic
 if [[ -n "$remove_node_ip" ]]; then
@@ -116,28 +142,12 @@ if [[ -n "$remove_worker_ip" ]]; then
     exit 0
 fi
 
-# Function to update CoreDNS with 8.8.8.8 8.8.4.4 servers
+# Function to update CoreDNS with 8.8.8.8 1.1.1.1 servers
 update_coredns_config() {
-    echo "Updating CoreDNS configuration..."
-    kubectl -n kube-system get cm coredns -o json | jq '.data.Corefile = 
-    ".:53 {
-        errors
-        health
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-          pods insecure
-          fallthrough in-addr.arpa ip6.arpa
-        }
-        prometheus :9153
-        forward . 8.8.8.8 8.8.4.4
-        cache 30
-        loop
-        reload
-        loadbalance
-        import /etc/coredns/custom/*.override
-    }
-    import /etc/coredns/custom/*.server"' | kubectl apply -f -
-    echo "CoreDNS configuration updated."
+    while ! kubectl -n kube-system get cm coredns >/dev/null 2>&1; do echo waiting for the coredns configmap resource ...; sleep 2; done
+    echo "Patching CoreDNS configuration to use 8.8.8.8 1.1.1.1 servers instead of the systemd-resolved default..."
+    kubectl patch configmap coredns -n kube-system --type merge -p '{"data":{"Corefile":".:53 {\n        errors\n        health\n        ready\n        kubernetes cluster.local in-addr.arpa ip6.arpa {\n          pods insecure\n          fallthrough in-addr.arpa ip6.arpa\n        }\n        hosts /etc/coredns/NodeHosts {\n          ttl 60\n          reload 15s\n          fallthrough\n        }\n        prometheus :9153\n        forward . 8.8.8.8 1.1.1.1\n        cache 30\n        loop\n        reload\n        loadbalance\n        import /etc/coredns/custom/*.override\n    }\n    import /etc/coredns/custom/*.server"}}'
+    echo "CoreDNS configuration patched."
 }
 
 # Add control plane node logic
@@ -145,10 +155,12 @@ if [[ "$mode" == "init" ]]; then
     echo "Starting initial K3s installation on master node..."
     install_exec="--disable=${disable_components} --flannel-backend=none --cluster-init"
     if [[ -n "$external_ip" ]]; then
-        install_exec+=" --tls-san=${external_ip}"
+        install_exec+=" --node-external-ip=${external_ip}"
     fi
-    internal_ip=$(hostname -I | awk '{print $1}')
-    install_exec+=" --tls-san=${internal_ip}"
+    install_exec+=" --node-ip=${internal_ip}"
+    if [[ -n "$tls_san" ]]; then
+        install_exec+=" --tls-san=${tls_san}"
+    fi
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
     echo "K3s installation completed."
     token=$(cat /var/lib/rancher/k3s/server/token)
@@ -206,7 +218,15 @@ else
         exit 1
     fi
     echo "Adding a new control-plane node to the cluster..."
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --flannel-backend=none" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    install_exec="server --flannel-backend=none"
+    if [[ -n "$external_ip" ]]; then
+        install_exec+=" --node-external-ip=${external_ip}"
+    fi
+    install_exec+=" --node-ip=${internal_ip}"
+    if [[ -n "$tls_san" ]]; then
+        install_exec+=" --tls-san=${tls_san}"
+    fi
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="${install_exec}" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 
@@ -216,9 +236,6 @@ if [[ -n "$external_ip" ]]; then
 
     # Define paths for the kubeconfig files
     kubeconfig_path=/etc/rancher/k3s/k3s.yaml
-
-    # Extract internal IP
-    internal_ip=$(hostname -I | awk '{print $1}')
 
     # Extract the current certificate-authority-data
     ca_data=$(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
