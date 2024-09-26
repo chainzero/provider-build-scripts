@@ -63,25 +63,23 @@ while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
 done
 shift $((OPTIND -1))
 
-if [[ "$mode" == "init" ]] || [[ -n "$external_ip" ]]; then
-  if [[ -z "$internal_network" ]]; then
-      echo "Please provide the internal network using the -n option."
-      exit 1
-  fi
-
-  # Ensure only the first two octets (e.g., 172.18.) are used from the provided network
-  internal_network=$(echo "$internal_network" | cut -d'.' -f1,2)
-
-  # Detect the internal IP based on the first two octets of the provided network
-  internal_ip=$(hostname -I | tr ' ' '\n' | grep "^${internal_network}\." | head -n 1)
-
-  if [[ -z "$internal_ip" ]]; then
-      echo "No IP found in the network ${internal_network}. Please verify."
-      exit 1
-  fi
-
-  echo "Selected internal IP: $internal_ip"
+if [[ -z "$internal_network" ]]; then
+    echo "Please provide the internal network using the -n option."
+    exit 1
 fi
+
+# Ensure only the first two octets (e.g., 172.18.) are used from the provided network
+internal_network=$(echo "$internal_network" | cut -d'.' -f1,2)
+
+# Detect the internal IP based on the first two octets of the provided network
+internal_ip=$(hostname -I | tr ' ' '\n' | grep "^${internal_network}\." | head -n 1)
+
+if [[ -z "$internal_ip" ]]; then
+    echo "No IP found in the network ${internal_network}. Please verify."
+    exit 1
+fi
+
+echo "Selected internal IP: $internal_ip"
 
 # Remove control plane node logic
 if [[ -n "$remove_node_ip" ]]; then
@@ -220,7 +218,15 @@ else
         exit 1
     fi
     echo "Adding a new control-plane node to the cluster..."
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server --flannel-backend=none" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    install_exec="server --flannel-backend=none"
+    if [[ -n "$external_ip" ]]; then
+        install_exec+=" --node-external-ip=${external_ip}"
+    fi
+    install_exec+=" --node-ip=${internal_ip}"
+    if [[ -n "$tls_san" ]]; then
+        install_exec+=" --tls-san=${tls_san}"
+    fi
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="${install_exec}" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 
