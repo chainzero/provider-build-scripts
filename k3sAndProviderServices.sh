@@ -169,9 +169,9 @@ if [[ "$mode" == "init" ]]; then
     echo "Starting initial K3s installation on master node..."
     install_exec="--disable=${disable_components} --flannel-backend=none --cluster-init"
     if [[ -n "$external_ip" ]]; then
-        install_exec+=" --tls-san=${external_ip}"
+        install_exec+=" --node-external-ip=${external_ip}"
     fi
-    install_exec+=" --tls-san=${internal_ip}"
+    install_exec+=" --node-ip=${internal_ip}"
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$install_exec" sh -
     echo "K3s installation completed."
     token=$(cat /var/lib/rancher/k3s/server/token)
