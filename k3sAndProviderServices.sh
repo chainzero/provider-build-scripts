@@ -140,7 +140,7 @@ if [[ -n "$remove_worker_ip" ]]; then
     exit 0
 fi
 
-# Function to update CoreDNS with 8.8.8.8 8.8.4.4 servers
+# Function to update CoreDNS with 8.8.8.8 1.1.1.1 servers
 update_coredns_config() {
     echo "Updating CoreDNS configuration..."
     kubectl -n kube-system get cm coredns -o json | jq '.data.Corefile = 
@@ -153,7 +153,7 @@ update_coredns_config() {
           fallthrough in-addr.arpa ip6.arpa
         }
         prometheus :9153
-        forward . 8.8.8.8 8.8.4.4
+        forward . 8.8.8.8 1.1.1.1
         cache 30
         loop
         reload
