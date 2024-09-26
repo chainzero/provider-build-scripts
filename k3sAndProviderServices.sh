@@ -147,26 +147,9 @@ fi
 # Function to update CoreDNS with 8.8.8.8 1.1.1.1 servers
 update_coredns_config() {
     while ! kubectl -n kube-system get cm coredns >/dev/null 2>&1; do echo waiting for the coredns configmap resource ...; sleep 2; done
-    echo "Updating CoreDNS configuration..."
-    kubectl -n kube-system get cm coredns -o json | jq '.data.Corefile = 
-    ".:53 {
-        errors
-        health
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-          pods insecure
-          fallthrough in-addr.arpa ip6.arpa
-        }
-        prometheus :9153
-        forward . 8.8.8.8 1.1.1.1
-        cache 30
-        loop
-        reload
-        loadbalance
-        import /etc/coredns/custom/*.override
-    }
-    import /etc/coredns/custom/*.server"' | kubectl apply -f -
-    echo "CoreDNS configuration updated."
+    echo "Patching CoreDNS configuration to use 8.8.8.8 1.1.1.1 servers instead of the systemd-resolved default..."
+    kubectl patch configmap coredns -n kube-system --type merge -p '{"data":{"Corefile":".:53 {\n        errors\n        health\n        ready\n        kubernetes cluster.local in-addr.arpa ip6.arpa {\n          pods insecure\n          fallthrough in-addr.arpa ip6.arpa\n        }\n        hosts /etc/coredns/NodeHosts {\n          ttl 60\n          reload 15s\n          fallthrough\n        }\n        prometheus :9153\n        forward . 8.8.8.8 1.1.1.1\n        cache 30\n        loop\n        reload\n        loadbalance\n        import /etc/coredns/custom/*.override\n    }\n    import /etc/coredns/custom/*.server"}}'
+    echo "CoreDNS configuration patched."
 }
 
 # Add control plane node logic
