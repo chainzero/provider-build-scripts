@@ -167,7 +167,7 @@ if [[ "$mode" == "init" ]]; then
     token=$(cat /var/lib/rancher/k3s/server/token)
     echo "K3s control-plane and worker node token: $token"
     echo "Installing Calico CNI..."
-    kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/refs/tags/v3.28.2/manifests/calico.yaml
     echo "Calico CNI installation completed."
 
     # Ensure jq is installed for JSON processing
