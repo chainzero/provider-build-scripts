@@ -153,6 +153,18 @@ update_coredns_config() {
 
 # Add control plane node logic
 if [[ "$mode" == "init" ]]; then
+    # Ensure jq is installed for JSON processing
+    if ! command -v jq &> /dev/null; then
+        echo "jq is not installed. Installing jq..."
+        apt-get update && apt-get install -y jq
+    fi
+
+    # Ensure yq is installed for YAML processing
+    if ! command -v yq &> /dev/null; then
+        echo "yq is not installed. Installing yq..."
+        sudo curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/bin/yq && chmod +x /usr/bin/yq
+    fi
+
     echo "Starting initial K3s installation on master node..."
     install_exec="--cluster-init"
     if [[ -n "$external_ip" ]]; then
@@ -167,14 +179,10 @@ if [[ "$mode" == "init" ]]; then
     token=$(cat /var/lib/rancher/k3s/server/token)
     echo "K3s control-plane and worker node token: $token"
     echo "Installing Calico CNI..."
-    kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/refs/tags/v3.28.2/manifests/calico.yaml
+    curl -O https://raw.githubusercontent.com/projectcalico/calico/refs/tags/v3.28.2/manifests/calico.yaml
+    yq eval-all '(select(.kind == "DaemonSet" and .metadata.name == "calico-node").spec.template.spec.containers[] | select(.name == "calico-node").env) += {"name": "IP_AUTODETECTION_METHOD", "value": "kubernetes-internal-ip"}' -i calico.yaml
+    kubectl apply -f calico.yaml
     echo "Calico CNI installation completed."
-
-    # Ensure jq is installed for JSON processing
-    if ! command -v jq &> /dev/null; then
-        echo "jq is not installed. Installing jq..."
-        apt-get update && apt-get install -y jq
-    fi
 
     update_coredns_config  # Update the CoreDNS ConfigMap
 
