@@ -162,7 +162,7 @@ if [[ "$mode" == "init" ]]; then
     # Ensure yq is installed for YAML processing
     if ! command -v yq &> /dev/null; then
         echo "yq is not installed. Installing yq..."
-        curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/bin/yq && chmod +x /usr/bin/yq
+        curl -L https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq && chmod +x /usr/local/bin/yq
     fi
 
     echo "Starting initial K3s installation on master node..."
