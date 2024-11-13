@@ -238,7 +238,7 @@ EOF
     helm upgrade -i nvdp nvdp/nvidia-device-plugin \
       --namespace nvidia-device-plugin \
       --create-namespace \
-      --version 0.14.5 \
+      --version 0.16.2 \
       --set runtimeClassName="nvidia" \
       --set deviceListStrategy=volume-mounts \
       --set-string nodeSelector.allow-nvdp="true"
