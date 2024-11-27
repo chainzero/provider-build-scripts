@@ -13,7 +13,7 @@ master_ip=""
 token=""
 internal_network=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
-k3s_common_args="--disable=${disable_components} --flannel-backend=none"
+k3s_common_args="--disable=${disable_components} --flannel-backend=none  --kubelet-arg=root-dir=/ephemeral/kubelet"
 
 # Process command-line options
 while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
@@ -174,7 +174,7 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec --data-dir /ephemeral" sh -
     echo "K3s installation completed."
     token=$(cat /var/lib/rancher/k3s/server/token)
     echo "K3s control-plane and worker node token: $token"
@@ -237,7 +237,7 @@ else
     fi
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec}" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec}" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" --data-dir /ephemeral sh -
     echo "Control-plane node added to the cluster."
 fi
 
