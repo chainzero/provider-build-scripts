@@ -176,7 +176,7 @@ if [[ "$mode" == "init" ]]; then
     fi
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec --data-dir /ephemeral" sh -
     echo "K3s installation completed."
-    token=$(cat /var/lib/rancher/k3s/server/token)
+    token=$(cat /ephemeral/server/token)
     echo "K3s control-plane and worker node token: $token"
     echo "Installing Calico CNI..."
     curl -O https://raw.githubusercontent.com/projectcalico/calico/refs/tags/v3.28.2/manifests/calico.yaml
