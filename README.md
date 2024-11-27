@@ -1,7 +1,9 @@
 # provider-build-scripts
 
 First create the `/ephemeral` directory. It will be used for imagefs/nodefs.
+
 `mkdir -p /ephemeral`
+
 If the cluster has a dedicated nodefs/imagefs storage (a separate nvme drive or a number of drives in a RAID) make sure it's mounted on `/ephemeral`
 
 ## Example cluster installation
