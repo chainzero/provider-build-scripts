@@ -13,7 +13,7 @@ master_ip=""
 token=""
 internal_network=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
-k3s_common_args="--disable=${disable_components} --flannel-backend=none  --kubelet-arg=root-dir=/ephemeral/kubelet"
+k3s_common_args="--disable=${disable_components} --flannel-backend=none  --kubelet-arg=root-dir=/ephemeral/kubelet --data-dir /ephemeral"
 
 # Process command-line options
 while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
@@ -174,7 +174,7 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec --data-dir /ephemeral" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec" sh -
     echo "K3s installation completed."
     token=$(cat /ephemeral/server/token)
     echo "K3s control-plane and worker node token: $token"
