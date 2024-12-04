@@ -10,10 +10,11 @@ master_ip=""
 token=""
 install_gpu_drivers=false
 install_storage_support=false
-k3s_common_args="--kubelet-arg=root-dir=/ephemeral/kubelet --data-dir /ephemeral"
+kubelet_storage=""
+containerd_storage=""
 
 # Process command-line options
-while getopts ":m:t:gs" opt; do
+while getopts ":m:t:gs:k:o:" opt; do
   case ${opt} in
     m )
       master_ip=$OPTARG
@@ -26,6 +27,12 @@ while getopts ":m:t:gs" opt; do
       ;;
     s )
       install_storage_support=true
+      ;;
+    k )
+      kubelet_storage="--kubelet-arg=root-dir=$OPTARG"
+      ;;
+    o )
+      containerd_storage="--data-dir=$OPTARG"
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -47,7 +54,7 @@ fi
 
 # Install K3s worker node
 echo "Starting K3s installation on worker node..."
-curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$k3s_common_args" sh -
+curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$kubelet_storage $containerd_storage" sh -
 
 # Check if K3s agent is running
 echo "Verifying K3s installation on worker node..."
