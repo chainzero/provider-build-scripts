@@ -1,10 +1,5 @@
 # provider-build-scripts
 
-If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
-Example
-```
-./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
-```
 
 ## Example cluster installation
 
@@ -17,6 +12,13 @@ Example
 
 ```
 ./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18.
+```
+
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
+Example
+
+```
+./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
 ```
 
 IMPORTANT: Note down the line `K3s control-plane and worker node token:` as it'll contain the token you'll need to join further nodes.
