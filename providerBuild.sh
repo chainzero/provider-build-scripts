@@ -259,13 +259,13 @@ if [ "$install_storage_support" = true ]; then
 
     # Install the Rook-Ceph Helm chart for the operator
     echo "Installing Rook-Ceph operator..."
-    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.14.0 -f rook-ceph-operator.values.yml
+    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.15.6 -f rook-ceph-operator.values.yml
     echo "Rook-Ceph operator installation completed."
 
     # Install the Rook-Ceph cluster
     echo "Installing Rook-Ceph cluster..."
     helm install --create-namespace -n rook-ceph rook-ceph-cluster \
-       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.14.0 \
+       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.15.6 \
        -f ~/provider/rook-ceph-cluster.values.yml
     echo "Rook-Ceph cluster installation completed."
 
