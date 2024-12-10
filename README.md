@@ -1,10 +1,8 @@
 # provider-build-scripts
 
-First create the `/ephemeral` directory. It will be used for imagefs/nodefs.
-
-`mkdir -p /ephemeral`
-
-If the cluster has a dedicated nodefs/imagefs storage (a separate nvme drive or a number of drives in a RAID) make sure it's mounted on `/ephemeral`
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
+Example
+./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
 
 ## Example cluster installation
 
