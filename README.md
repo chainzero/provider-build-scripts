@@ -15,6 +15,7 @@
 ```
 
 If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
+
 Example
 
 ```
