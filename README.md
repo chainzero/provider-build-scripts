@@ -2,7 +2,9 @@
 
 If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
 Example
+```
 ./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
+```
 
 ## Example cluster installation
 
