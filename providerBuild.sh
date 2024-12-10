@@ -254,8 +254,8 @@ if [ "$install_storage_support" = true ]; then
     echo "Rook-Ceph repository added."
 
     # Create the rook-ceph-operator.values.yaml file and append the kubelet directory location
-    touch /root/provider/rook-ceph-operator.values.yaml
-    echo "kubeletDirPath: /ephemeral/kubelet" >> /root/provider/rook-ceph-operator.values.yaml
+        echo "csi:" > /root/provider/rook-ceph-operator.values.yaml
+    echo "  kubeletDirPath: /data/kubelet" >> /root/provider/rook-ceph-operator.values.yaml
 
     # Install the Rook-Ceph Helm chart for the operator
     echo "Installing Rook-Ceph operator..."
