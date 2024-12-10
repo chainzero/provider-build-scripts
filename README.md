@@ -1,5 +1,6 @@
 # provider-build-scripts
 
+
 ## Example cluster installation
 
 > `172.18.*` is the internal network
@@ -11,6 +12,14 @@
 
 ```
 ./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18.
+```
+
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
+
+Example
+
+```
+./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
 ```
 
 IMPORTANT: Note down the line `K3s control-plane and worker node token:` as it'll contain the token you'll need to join further nodes.
@@ -29,8 +38,24 @@ echo
 ./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18.
 ```
 
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
+
+Example
+
+```
+./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18. -o /data/containerd -k /data/kubelet
+```
+
 3. Join the worker nodes
 
 ```
 ./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g
+```
+
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
+
+Example
+
+```
+./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g -o /data/containerd -k /data/kubelet
 ```
