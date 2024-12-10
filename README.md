@@ -14,7 +14,7 @@
 ./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18.
 ```
 
-If the cluster has a dedicated ephemeral storage, specify the location using -o and -k
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
 
 Example
 
@@ -38,8 +38,24 @@ echo
 ./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18.
 ```
 
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
+
+Example
+
+```
+./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18. -o /data/containerd -k /data/kubelet
+```
+
 3. Join the worker nodes
 
 ```
 ./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g
+```
+
+If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
+
+Example
+
+```
+./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g -o /data/containerd -k /data/kubelet
 ```
