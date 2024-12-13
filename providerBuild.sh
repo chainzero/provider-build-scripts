@@ -49,7 +49,6 @@ NODEFS_DIR=$(extract_path "$KUBELET_ARG" "$DEFAULT_KUBELET_DIR")
 
 # Debugging Output results
 echo "nodefs directory: $NODEFS_DIR"
-echo "imagefs directory: $IMAGEFS_DIR"
 
 # Function to fetch appVersion from Helm Chart
 fetch_app_version() {
