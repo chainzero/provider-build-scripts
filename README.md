@@ -8,10 +8,9 @@
 1. Initialize the control-plane node
 
 > `provider.h100.sdg.val.akash.pub` is just the example  
-> `-e` - `curl -s ident.me` returns a public IP of the node  
 
 ```
-./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18.
+./k3sAndProviderServices.sh -d traefik -s provider.h100.sdg.val.akash.pub -g -n 172.18.
 ```
 
 If the cluster has a dedicated ephemeral storage, specify the location using -o and -k.
@@ -19,7 +18,7 @@ If the cluster has a dedicated ephemeral storage, specify the location using -o 
 Example
 
 ```
-./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
+./k3sAndProviderServices.sh -d traefik -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/containerd -k /data/kubelet
 ```
 
 IMPORTANT: Note down the line `K3s control-plane and worker node token:` as it'll contain the token you'll need to join further nodes.
@@ -43,7 +42,7 @@ If the cluster has a dedicated ephemeral storage, specify the location using -o 
 Example
 
 ```
-./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18. -o /data/containerd -k /data/kubelet
+./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -m 172.18.140.11 -c $TOKEN -g -n 172.18. -o /data/containerd -k /data/kubelet
 ```
 
 3. Join the worker nodes
