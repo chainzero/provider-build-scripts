@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Example use:
-#./worker.sh -m 10.128.0.8 -t K10cef5da8867a6d3d2acc25aa817c7c06f86a638ee7ad4c0668c248c23167c1140::server:da3e13b2aafc1983789be9841b7e5e83 -g -s
+#./worker.sh -m 10.128.0.8 -t K10cef5da8867a6d3d2acc25aa817c7c06f86a638ee7ad4c0668c248c23167c1140::server:da3e13b2aafc1983789be9841b7e5e83 -g -s  -o /data/containerd -k /data/kubelet
 
 # Worker Script
 
