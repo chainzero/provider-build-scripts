@@ -3,9 +3,9 @@
 # Provider Setup Script
 
 # Initialize variables with default values or empty
-ACCOUNT_ADDRESS=""
-KEY_PASSWORD=""
-DOMAIN=""
+ACCOUNT_ADDRESS="akash123456789"
+KEY_PASSWORD="blabla"
+DOMAIN="test.europlots.com"
 NODE=""  # Default to empty, will be set later based on chain_id or user input
 chain_id="akashnet-2"  # Default chain ID
 provider_version=""  # Will be fetched from Helm Chart
@@ -25,30 +25,33 @@ DEFAULT_CONTAINERD_DIR="/var/lib/containerd"
 # K3S Service file
 SERVICE_FILE="/etc/systemd/system/k3s.service"
 
-# Function to extract path from argument - we will use this later to determine the path 
+# Function to extract path from argument - we will use this later to determine the path
 extract_path() {
   local arg=$1
   local default_path=$2
-  
+
   # If no path is found in service file, return default
   if [ -z "$arg" ]; then
     echo "$default_path"
     return
   fi
-    
+
   # Extract the path value
   echo "$arg" | sed 's/.*=\(.*\)/\1/'
 }
 
 # Extract the ExecStart line and arguments
-EXECSTART=$(grep "ExecStart=" "$SERVICE_FILE" -A 5)
+EXECSTART=$(grep "ExecStart=" "$SERVICE_FILE" -A 10)
 
 # Look for root-dir (nodefs) argument
 KUBELET_ARG=$(echo "$EXECSTART" | grep -o "\--kubelet-arg=root-dir=[^ ]*")
-NODEFS_DIR=$(extract_path "$KUBELET_ARG" "$DEFAULT_KUBELET_DIR")
+NODEFS_DIR=$((extract_path "$KUBELET_ARG" "$DEFAULT_KUBELET_DIR") | tr -d "'")
+IMAGEFS_ARG=$(echo "$EXECSTART" | grep -o "\--data-dir=[^ ]*")
+IMAGEFS_DIR=$((extract_path "$IMAGEFS_ARG" "$DEFAULT_IMAGEFS_DIR") | tr -d "'")
 
 # Debugging Output results
 echo "nodefs directory: $NODEFS_DIR"
+echo "imagefs directory: $IMAGEFS_DIR"
 
 # Function to fetch appVersion from Helm Chart
 fetch_app_version() {
@@ -294,7 +297,6 @@ if [ "$install_storage_support" = true ]; then
     #Create or overwrite the values file
     #Debugging print the value of $NODEFS_DIR
     echo "$NODEFS_DIR"
-    NODEFS_DIR=$(echo "$NODEFS_DIR" | tr -d "'")
     cat > /root/provider/rook-ceph-operator.values.yml << EOF
 csi:
   kubeletDirPath: "$NODEFS_DIR"
