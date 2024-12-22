@@ -3,9 +3,9 @@
 # Provider Setup Script
 
 # Initialize variables with default values or empty
-ACCOUNT_ADDRESS="akash123456789"
-KEY_PASSWORD="blabla"
-DOMAIN="test.europlots.com"
+ACCOUNT_ADDRESS=""
+KEY_PASSWORD=""
+DOMAIN=""
 NODE=""  # Default to empty, will be set later based on chain_id or user input
 chain_id="akashnet-2"  # Default chain ID
 provider_version=""  # Will be fetched from Helm Chart
