@@ -19,8 +19,8 @@ storage_class_name="beta3"
 ### LOGIC THAT DETERMINES EPHEMERAL STORAGE LOCATION
 
 # Default paths
-DEFAULT_KUBELET_DIR="/var/lib/kubelet"
-DEFAULT_CONTAINERD_DIR="/var/lib/containerd"
+DEFAULT_NODEFS_DIR="/var/lib/kubelet"
+DEFAULT_IMAGEFS_DIR="/var/lib/containerd"
 
 # K3S Service file
 SERVICE_FILE="/etc/systemd/system/k3s.service"
@@ -44,8 +44,8 @@ extract_path() {
 EXECSTART=$(grep "ExecStart=" "$SERVICE_FILE" -A 10)
 
 # Look for root-dir (nodefs) argument
-KUBELET_ARG=$(echo "$EXECSTART" | grep -o "\--kubelet-arg=root-dir=[^ ]*")
-NODEFS_DIR=$((extract_path "$KUBELET_ARG" "$DEFAULT_KUBELET_DIR") | tr -d "'")
+NODEFS_ARG=$(echo "$EXECSTART" | grep -o "\--kubelet-arg=root-dir=[^ ]*")
+NODEFS_DIR=$((extract_path "$NODEFS_ARG" "$DEFAULT_NODEFS_DIR") | tr -d "'")
 IMAGEFS_ARG=$(echo "$EXECSTART" | grep -o "\--data-dir=[^ ]*")
 IMAGEFS_DIR=$((extract_path "$IMAGEFS_ARG" "$DEFAULT_IMAGEFS_DIR") | tr -d "'")
 
@@ -293,7 +293,7 @@ if [ "$install_storage_support" = true ]; then
     # Create the rook-ceph-operator.values.yml file and append the kubelet directory location
 
     # Check if NODEFS_DIR is different from default and create values file if needed
-    if [ "$NODEFS_DIR" != "$DEFAULT_KUBELET_DIR" ]; then
+    if [ "$NODEFS_DIR" != "$DEFAULT_NODEFS_DIR" ]; then
     #Create or overwrite the values file
     #Debugging print the value of $NODEFS_DIR
     echo "$NODEFS_DIR"
