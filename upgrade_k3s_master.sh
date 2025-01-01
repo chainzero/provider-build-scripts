@@ -2,6 +2,14 @@
 # upgrade-k3s-master.sh
 # Script to upgrade K3s master node while preserving original installation arguments
 
+# First create backups of the service file and the service environment file.
+
+mkdir -p /root/backup
+cp /etc/systemd/system/k3s.service /root/backup/
+cp /etc/systemd/system/k3s.service.env /root/backup
+
+# Logic to extract existing K3S args from the /etc/systemd/system/k3s.service file
+
 function get_k3s_server_args() {
     if [ -f "/etc/systemd/system/k3s.service" ]; then
         # Extract all lines between ExecStart and the next empty line or section
@@ -18,18 +26,6 @@ function get_k3s_server_args() {
         echo "Error: K3s server service file not found"
         exit 1
     fi
-}
-
-function get_k3s_server_env_vars() {
-    ENV_VARS=""
-    if [ -f "/etc/systemd/system/k3s.service.env" ]; then
-        while IFS= read -r line || [[ -n "$line" ]]; do
-            if [[ ! "$line" =~ ^#.*$ ]] && [ ! -z "$line" ]; then
-                ENV_VARS="$ENV_VARS $line"
-            fi
-        done < "/etc/systemd/system/k3s.service.env"
-    fi
-    echo "$ENV_VARS"
 }
 
 # Check if running as root

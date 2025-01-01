@@ -2,6 +2,14 @@
 # upgrade-k3s-agent.sh
 # Script to upgrade K3s agent node while preserving original installation arguments
 
+# First create backups of the service file and the service environment file.
+    
+mkdir -p /root/backup
+cp /etc/systemd/system/k3s-agent.service /root/backup/
+cp /etc/systemd/system/k3s-agent.service.env /root/backup
+
+# Logic to extract existing K3S args from the /etc/systemd/system/k3s.service file
+
 function get_k3s_agent_args() {
     if [ -f "/etc/systemd/system/k3s-agent.service" ]; then
         # Extract all lines between ExecStart and the next empty line or section
@@ -19,6 +27,8 @@ function get_k3s_agent_args() {
         exit 1
     fi
 }
+
+# Logic to extract existing K3S agent node variables: the server IP address and the token - from the /etc/systemd/system/k3s.service.env file
 
 function get_k3s_agent_env_vars() {
     ENV_VARS=""
