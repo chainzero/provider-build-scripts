@@ -42,13 +42,12 @@ fi
 
 # Get installation arguments
 INSTALL_ARGS=$(get_k3s_server_args)
-ENV_VARS=$(get_k3s_server_env_vars)
 
 echo "Detected installation arguments: $INSTALL_ARGS"
 echo "Detected environment variables: $ENV_VARS"
 
 # Construct and execute upgrade command, forcing IPv4
-UPGRADE_CMD="curl -4 -sfL https://get.k3s.io | $ENV_VARS INSTALL_K3S_EXEC=\"server $INSTALL_ARGS\" sh -"
+UPGRADE_CMD="curl -4 -sfL https://get.k3s.io | INSTALL_K3S_EXEC=\"server $INSTALL_ARGS\" sh -"
 
 echo "Executing upgrade command:"
 echo "$UPGRADE_CMD"
@@ -62,3 +61,4 @@ else
     echo "Upgrade cancelled."
     exit 0
 fi
+
