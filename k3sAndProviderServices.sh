@@ -12,7 +12,7 @@ mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
 master_ip=""
 token=""
 internal_network=""
-kubelet_dir=""
+nodefs_dir=""
 containerd_storage=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
 k3s_common_args="--disable=${disable_components} --flannel-backend=none"
@@ -59,7 +59,7 @@ while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
       exit 1
       ;;
     k )
-      kubelet_dir="--kubelet-arg=root-dir=$OPTARG"
+      nodefs_dir="--kubelet-arg=root-dir=$OPTARG"
       ;;
     o )
       containerd_storage="--data-dir=$OPTARG"
@@ -182,7 +182,7 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $kubelet_dir $containerd_storage" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $containerd_storage" sh -
     echo "K3s installation completed."
 
     # display the server token
@@ -259,7 +259,7 @@ else
     fi
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $kubelet_dir $containerd_storage" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $containerd_storage" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 
