@@ -40,8 +40,8 @@ extract_path() {
   echo "$arg" | sed 's/.*=\(.*\)/\1/'
 }
 
-# Extract the ExecStart line and arguments
-EXECSTART=$(grep "ExecStart=" "$SERVICE_FILE" -A 10)
+# Extract the ExecStart command using systemctl
+EXECSTART=$(systemctl show k3s.service --property=ExecStart --no-pager -l | sed 's/.*ExecStart=//')
 
 # Look for root-dir (nodefs) argument
 NODEFS_ARG=$(echo "$EXECSTART" | grep -o "\--kubelet-arg=root-dir=[^ ]*")
