@@ -11,7 +11,7 @@ token=""
 install_gpu_drivers=false
 install_storage_support=false
 kubelet_storage=""
-containerd_storage=""
+imagefs_dir=""
 INSTALL_K3S_EXEC=""
 
 # Process command-line options
@@ -33,7 +33,7 @@ while getopts ":m:t:gsk:o:" opt; do
       kubelet_storage="--kubelet-arg=root-dir=$OPTARG"
       ;;
     o )
-      containerd_storage="--data-dir=$OPTARG"
+      imagefs_dir="--data-dir=$OPTARG"
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
@@ -55,12 +55,12 @@ fi
 
 # debugging OPTARG
 echo "Debug: kubelet_storage = $kubelet_storage"
-echo "Debug: containerd_storage = $containerd_storage"
+echo "Debug: imagefs_dir = $imagefs_dir"
 
 # Install K3s worker node
 echo "Starting K3s installation on worker node..."
-echo "INSTALL_K3S_EXEC value: agent ${kubelet_storage} ${containerd_storage}"
-curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$kubelet_storage $containerd_storage" sh -
+echo "INSTALL_K3S_EXEC value: agent ${kubelet_storage} ${imagefs_dir}"
+curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$kubelet_storage $imagefs_dir" sh -
 
 # Check if K3s agent is running
 echo "Verifying K3s installation on worker node..."
