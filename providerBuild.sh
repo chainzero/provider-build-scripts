@@ -20,7 +20,7 @@ storage_class_name="beta3"
 
 # Default paths
 DEFAULT_NODEFS_DIR="/var/lib/kubelet"
-DEFAULT_IMAGEFS_DIR="/var/lib/containerd"
+DEFAULT_IMAGEFS_DIR="/var/lib/rancher/k3s"
 
 # K3S Service file
 SERVICE_FILE="/etc/systemd/system/k3s.service"
