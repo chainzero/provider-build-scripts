@@ -306,7 +306,7 @@ fi
 
     # Install the Rook-Ceph Helm chart for the operator
     echo "Installing Rook-Ceph operator..."
-    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.14.0 -f ~/provider/rook-ceph-operator.values.yml
+    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.16.1 -f ~/provider/rook-ceph-operator.values.yml
     echo "Rook-Ceph operator installation completed."
 
     # Install the Rook-Ceph cluster
