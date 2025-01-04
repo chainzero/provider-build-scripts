@@ -10,7 +10,7 @@ master_ip=""
 token=""
 install_gpu_drivers=false
 install_storage_support=false
-kubelet_storage=""
+nodefs_dir=""
 imagefs_dir=""
 INSTALL_K3S_EXEC=""
 
@@ -30,7 +30,7 @@ while getopts ":m:t:gsk:o:" opt; do
       install_storage_support=true
       ;;
     k )
-      kubelet_storage="--kubelet-arg=root-dir=$OPTARG"
+      nodefs_dir="--kubelet-arg=root-dir=$OPTARG"
       ;;
     o )
       imagefs_dir="--data-dir=$OPTARG"
@@ -54,13 +54,13 @@ if [ -z "$master_ip" ] || [ -z "$token" ]; then
 fi
 
 # debugging OPTARG
-echo "Debug: kubelet_storage = $kubelet_storage"
+echo "Debug: nodefs_dir = $nodefs_dir"
 echo "Debug: imagefs_dir = $imagefs_dir"
 
 # Install K3s worker node
 echo "Starting K3s installation on worker node..."
-echo "INSTALL_K3S_EXEC value: agent ${kubelet_storage} ${imagefs_dir}"
-curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$kubelet_storage $imagefs_dir" sh -
+echo "INSTALL_K3S_EXEC value: agent ${nodefs_dir} ${imagefs_dir}"
+curl -sfL https://get.k3s.io | K3S_URL=https://$master_ip:6443 K3S_TOKEN=$token INSTALL_K3S_EXEC="$nodefs_dir $imagefs_dir" sh -
 
 # Check if K3s agent is running
 echo "Verifying K3s installation on worker node..."
