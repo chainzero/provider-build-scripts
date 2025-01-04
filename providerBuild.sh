@@ -12,9 +12,46 @@ provider_version=""  # Will be fetched from Helm Chart
 node_version=""  # Will be fetched from Helm Chart
 install_gpu_support=false
 gpu_nodes=()
-install_storage_support=false
-use_pricing_script=false
-storage_class_name=""
+install_storage_support=true
+use_pricing_script=true
+storage_class_name="beta3"
+
+### LOGIC THAT DETERMINES EPHEMERAL STORAGE LOCATION
+
+# Default paths
+DEFAULT_NODEFS_DIR="/var/lib/kubelet"
+DEFAULT_IMAGEFS_DIR="/var/lib/rancher/k3s"
+
+# K3S Service file
+SERVICE_FILE="/etc/systemd/system/k3s.service"
+
+# Function to extract path from argument - we will use this later to determine the path
+extract_path() {
+  local arg=$1
+  local default_path=$2
+
+  # If no path is found in service file, return default
+  if [ -z "$arg" ]; then
+    echo "$default_path"
+    return
+  fi
+
+  # Extract the path value
+  echo "$arg" | sed 's/.*=\(.*\)/\1/'
+}
+
+# Extract the ExecStart command using systemctl
+EXECSTART=$(systemctl show k3s.service --property=ExecStart --no-pager -l | sed 's/.*ExecStart=//')
+
+# Look for root-dir (nodefs) argument
+NODEFS_ARG=$(echo "$EXECSTART" | grep -o "\--kubelet-arg=root-dir=[^ ]*")
+NODEFS_DIR=$((extract_path "$NODEFS_ARG" "$DEFAULT_NODEFS_DIR") | tr -d "'")
+IMAGEFS_ARG=$(echo "$EXECSTART" | grep -o "\--data-dir=[^ ]*")
+IMAGEFS_DIR=$((extract_path "$IMAGEFS_ARG" "$DEFAULT_IMAGEFS_DIR") | tr -d "'")
+
+# Debugging Output results
+echo "nodefs directory: $NODEFS_DIR"
+echo "imagefs directory: $IMAGEFS_DIR"
 
 # Function to fetch appVersion from Helm Chart
 fetch_app_version() {
@@ -253,15 +290,29 @@ if [ "$install_storage_support" = true ]; then
     helm repo update
     echo "Rook-Ceph repository added."
 
+    # Create the rook-ceph-operator.values.yml file and append the kubelet directory location
+
+    # Check if NODEFS_DIR is different from default and create values file if needed
+    if [ "$NODEFS_DIR" != "$DEFAULT_NODEFS_DIR" ]; then
+    #Create or overwrite the values file
+    #Debugging print the value of $NODEFS_DIR
+    echo "$NODEFS_DIR"
+    cat > /root/provider/rook-ceph-operator.values.yml << EOF
+csi:
+  kubeletDirPath: "$NODEFS_DIR"
+EOF
+    echo "Created /root/provider/rook-ceph-operator.values.yml with custom kubeletDirPath"
+fi
+
     # Install the Rook-Ceph Helm chart for the operator
     echo "Installing Rook-Ceph operator..."
-    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.14.0
+    helm install --create-namespace -n rook-ceph rook-ceph rook-release/rook-ceph --version 1.16.1 -f ~/provider/rook-ceph-operator.values.yml
     echo "Rook-Ceph operator installation completed."
 
     # Install the Rook-Ceph cluster
     echo "Installing Rook-Ceph cluster..."
     helm install --create-namespace -n rook-ceph rook-ceph-cluster \
-       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.14.0 \
+       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.16.1 \
        -f ~/provider/rook-ceph-cluster.values.yml
     echo "Rook-Ceph cluster installation completed."
 

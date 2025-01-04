@@ -12,11 +12,13 @@ mode="init"  # 'init' for initial setup, 'add' for adding control-plane nodes
 master_ip=""
 token=""
 internal_network=""
+nodefs_dir=""
+imagefs_dir=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
 k3s_common_args="--disable=${disable_components} --flannel-backend=none"
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
+while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -55,6 +57,12 @@ while getopts ":d:e:tagm:c:r:w:n:s:" opt; do
     \? )
       echo "Invalid option: $OPTARG" 1>&2
       exit 1
+      ;;
+    k )
+      nodefs_dir="--kubelet-arg=root-dir=$OPTARG"
+      ;;
+    o )
+      imagefs_dir="--data-dir=$OPTARG"
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
@@ -174,10 +182,24 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
     echo "K3s installation completed."
-    token=$(cat /var/lib/rancher/k3s/server/token)
+
+    # display the server token
+    if [[ -n "$imagefs_dir" ]]; then
+        # Extract the base path from imagefs_dir
+        base_path=$(echo "$imagefs_dir" | sed 's/--data-dir=//')
+        server_token_path="${base_path}/server/token"
+    fi
+
+    # Try to read the token, falling back to default location if needed
+    if [[ -f "$server_token_path" ]]; then
+        token=$(cat "$server_token_path")
+    else
+        token=$(cat "/var/lib/rancher/k3s/server/token")
+    fi
     echo "K3s control-plane and worker node token: $token"
+
     echo "Installing Calico CNI..."
     curl -O https://raw.githubusercontent.com/projectcalico/calico/refs/tags/v3.28.2/manifests/calico.yaml
     yq eval-all '(select(.kind == "DaemonSet" and .metadata.name == "calico-node").spec.template.spec.containers[] | select(.name == "calico-node").env) += {"name": "IP_AUTODETECTION_METHOD", "value": "kubernetes-internal-ip"}' -i calico.yaml
@@ -237,7 +259,7 @@ else
     fi
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec}" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 

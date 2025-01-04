@@ -7,10 +7,17 @@
 1. Initialize the control-plane node
 
 > `provider.h100.sdg.val.akash.pub` is just the example  
-> `-e` - `curl -s ident.me` returns a public IP of the node  
 
 ```
-./k3sAndProviderServices.sh -d traefik -e $(curl -s ident.me) -s provider.h100.sdg.val.akash.pub -g -n 172.18.
+./k3sAndProviderServices.sh -d traefik -s provider.h100.sdg.val.akash.pub -g -n 172.18.
+```
+
+If a node has a separate ephemeral storage directory, make sure to specify the -o and -k switches followed by the location. 
+Example:
+ephemeral storage location: `/data/`
+
+```
+./k3sAndProviderServices.sh -d traefik -s provider.h100.sdg.val.akash.pub -g -n 172.18. -o /data/k3s -k /data/kubelet
 ```
 
 IMPORTANT: Note down the line `K3s control-plane and worker node token:` as it'll contain the token you'll need to join further nodes.
@@ -26,7 +33,13 @@ IMPORTANT: Make sure to have at least 3 control-plane nodes. If you only have tw
 echo -n "Enter K3s control-plane and worker node token: "
 read -s TOKEN
 echo
-./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -e $(curl -s ident.me) -m 172.18.140.11 -c $TOKEN -g -n 172.18.
+./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -m 172.18.140.11 -c $TOKEN -g -n 172.18.
+```
+Again, if the ephemeral storage location is not at the default value, specify it using the -k and -o switches.
+Example:
+
+```
+./k3sAndProviderServices.sh -s provider.h100.sdg.val.akash.pub -m 172.18.140.11 -c $TOKEN -g -n 172.18. -o /data/k3s -k /data/kubelet
 ```
 
 3. Join the worker nodes
@@ -34,3 +47,12 @@ echo
 ```
 ./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g
 ```
+
+If the ephemeral storage location is not at the default value, specify it using the -k and -o switches.
+
+```
+./workerNode.sh -m 172.18.140.11 -t ${TOKEN} -g -o /data/k3s -k /data/kubelet
+```
+
+NODE UPGRADE:
+Please do not use the upgradeNode.sh at this point, it is a work in progress.
