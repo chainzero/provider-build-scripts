@@ -312,7 +312,7 @@ fi
     # Install the Rook-Ceph cluster
     echo "Installing Rook-Ceph cluster..."
     helm install --create-namespace -n rook-ceph rook-ceph-cluster \
-       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.14.0 \
+       --set operatorNamespace=rook-ceph rook-release/rook-ceph-cluster --version 1.16.1 \
        -f ~/provider/rook-ceph-cluster.values.yml
     echo "Rook-Ceph cluster installation completed."
 
