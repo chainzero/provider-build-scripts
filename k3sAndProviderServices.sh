@@ -182,7 +182,7 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
     echo "K3s installation completed."
 
     # display the server token
@@ -259,7 +259,7 @@ else
     fi
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
 fi
 
@@ -306,9 +306,14 @@ if [ "$install_gpu_drivers" = true ]; then
     DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
     apt-get autoremove -y
     echo "Installing NVIDIA drivers..."
-    apt-get install -y ubuntu-drivers-common
-    ubuntu-drivers devices
-    ubuntu-drivers autoinstall
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+    apt-key add 3bf863cc.pub && \
+    echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" | tee /etc/apt/sources.list.d/nvidia-official-repo.list && \
+    apt update
+    apt-get install build-essential dkms linux-headers-$(uname -r) -y
+    apt-get install nvidia-driver-565 -y
+    modprobe nvidia
+    nvidia-smi
     echo "NVIDIA GPU drivers installation completed."
     echo "Installing NVIDIA container runtime..."
     distribution="stable/deb"
@@ -327,4 +332,13 @@ if [ "$install_gpu_drivers" = true ]; then
     fi
 fi
 
-echo "Setup completed."
+echo "Disableing Unattended Upgrades"
+
+echo -en 'APT::Periodic::Update-Package-Lists "0";\nAPT::Periodic::Unattended-Upgrade "0";\n' | tee /etc/apt/apt.conf.d/20auto-upgrades
+
+apt remove unattended-upgrades -y
+
+systemctl stop unattended-upgrades.service
+systemctl mask unattended-upgrades.service
+
+echo "Setup Completed"
