@@ -18,7 +18,9 @@ tls_san="" # Example: provider.h100.sdg.val.akash.pub
 k3s_common_args="--disable=${disable_components} --flannel-backend=none"
 latestk3s=""
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
+
+# Process command-line options
+while getopts ":d:e:taglm:c:r:w:n:s:k:o:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -34,6 +36,9 @@ while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
       ;;
     g )
       install_gpu_drivers=true
+      ;;
+    l )
+      latestk3s=true
       ;;
     m )
       master_ip=$OPTARG
@@ -63,9 +68,6 @@ while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
       ;;
     o )
       imagefs_dir="--data-dir=$OPTARG"
-      ;;
-    l )
-      latestk3s="true"
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
@@ -266,10 +268,18 @@ else
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
+
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
+    
+    if [[ -n "$latestk3s" ]]; then
     curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
+    else
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    echo "Control-plane node added to the cluster."
+    fi
+
 fi
 
 # Update the kubeconfig file if an external IP is specified
