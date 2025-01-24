@@ -16,9 +16,11 @@ nodefs_dir=""
 imagefs_dir=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
 k3s_common_args="--disable=${disable_components} --flannel-backend=none"
+latestk3s=""
+# Process command-line options
 
 # Process command-line options
-while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
+while getopts ":d:e:taglm:c:r:w:n:s:k:o:" opt; do
   case ${opt} in
     d )
       disable_components=$OPTARG
@@ -34,6 +36,9 @@ while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
       ;;
     g )
       install_gpu_drivers=true
+      ;;
+    l )
+      latestk3s=true
       ;;
     m )
       master_ip=$OPTARG
@@ -182,9 +187,15 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
+    
+    if [[ -n "$latestk3s" ]]; then
+    curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
+    echo "K3s installation completed."
+    else
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
     echo "K3s installation completed."
-
+    fi
+    
     # display the server token
     if [[ -n "$imagefs_dir" ]]; then
         # Extract the base path from imagefs_dir
@@ -257,10 +268,18 @@ else
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
+
     # when K3S_URL is used, must add "server" when adding a new control-plane nodes to the cluster
     # it also must go first in the order, otherwise k3s.service will fail to start
+    
+    if [[ -n "$latestk3s" ]]; then
+    curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
+    echo "Control-plane node added to the cluster."
+    else
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server ${k3s_common_args} ${install_exec} $nodefs_dir $imagefs_dir" K3S_URL="https://$master_ip:6443" K3S_TOKEN="$token" sh -
     echo "Control-plane node added to the cluster."
+    fi
+
 fi
 
 # Update the kubeconfig file if an external IP is specified
@@ -306,9 +325,14 @@ if [ "$install_gpu_drivers" = true ]; then
     DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" dist-upgrade
     apt-get autoremove -y
     echo "Installing NVIDIA drivers..."
-    apt-get install -y ubuntu-drivers-common
-    ubuntu-drivers devices
-    ubuntu-drivers autoinstall
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub && \
+    apt-key add 3bf863cc.pub && \
+    echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" | tee /etc/apt/sources.list.d/nvidia-official-repo.list && \
+    apt update
+    apt-get install build-essential dkms linux-headers-$(uname -r) -y
+    apt-get install nvidia-driver-565 -y
+    modprobe nvidia
+    nvidia-smi
     echo "NVIDIA GPU drivers installation completed."
     echo "Installing NVIDIA container runtime..."
     distribution="stable/deb"
@@ -327,4 +351,13 @@ if [ "$install_gpu_drivers" = true ]; then
     fi
 fi
 
-echo "Setup completed."
+echo "Disableing Unattended Upgrades"
+
+echo -en 'APT::Periodic::Update-Package-Lists "0";\nAPT::Periodic::Unattended-Upgrade "0";\n' | tee /etc/apt/apt.conf.d/20auto-upgrades
+
+apt remove unattended-upgrades -y
+
+systemctl stop unattended-upgrades.service
+systemctl mask unattended-upgrades.service
+
+echo "Setup Completed"
