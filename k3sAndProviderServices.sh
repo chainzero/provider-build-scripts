@@ -16,7 +16,7 @@ nodefs_dir=""
 imagefs_dir=""
 tls_san="" # Example: provider.h100.sdg.val.akash.pub
 k3s_common_args="--disable=${disable_components} --flannel-backend=none"
-
+latestk3s=""
 # Process command-line options
 while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
   case ${opt} in
@@ -63,6 +63,9 @@ while getopts ":d:e:tagm:c:r:w:n:s:k:o:" opt; do
       ;;
     o )
       imagefs_dir="--data-dir=$OPTARG"
+      ;;
+    l )
+      latestk3s="true"
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
@@ -182,9 +185,15 @@ if [[ "$mode" == "init" ]]; then
     if [[ -n "$tls_san" ]]; then
         install_exec+=" --tls-san=${tls_san}"
     fi
+    
+    if [[ -n "$latestk3s" ]]; then
     curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=latest INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
     echo "K3s installation completed."
-
+    else
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$k3s_common_args $install_exec $nodefs_dir $imagefs_dir" sh -
+    echo "K3s installation completed."
+    fi
+    
     # display the server token
     if [[ -n "$imagefs_dir" ]]; then
         # Extract the base path from imagefs_dir
